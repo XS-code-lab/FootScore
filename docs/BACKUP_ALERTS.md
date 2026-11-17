@@ -20,7 +20,8 @@ Conditions and outgoing events:
 | Healthy *visibility* after any previously alerted failure | `backup_visibility_restored` |
 
 **A recent object is NEVER evidence of a valid encrypted archive or a
-successful PostgreSQL restore.** All webhook payloads explicitly include
+successful PostgreSQL restore. For a separate, operator-run restore audit
+use the v0.23 `app.restore_audit` CLI (ISOLATED_RESTORE_AUDIT.md).** All webhook payloads explicitly include
 `cryptographic_integrity_verified=false` and `restore_verified=false`.
 The recovery event describes visibility only, not database recoverability.
 
