@@ -71,6 +71,10 @@ flag only in the isolated integration job.
   yield exactly one successful revocation (compare-and-swap).
 - Two concurrent encrypted SMTP-outbox workers claim separate messages
   under PostgreSQL row locks; no real SMTP connection is made in CI.
+- An additional pg_dump/pg_restore drill restores a synthetic match, user,
+  live-update cursor, auth token hash and email outbox into a fresh
+  disposable PostgreSQL database, verifies the original is untouched,
+  and refuses restoring over an existing target.
 - Real Redis receives an update published from a committed
   PostgreSQL outbox row, and the HTTP replay endpoint returns it.
 - A deliberately failed ingestion transaction does not persist
