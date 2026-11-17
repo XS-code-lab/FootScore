@@ -241,7 +241,10 @@ class LiveUpdate(Base):
         DateTime(timezone=True), default=utcnow, nullable=False,
     )
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    __table_args__ = (Index("ix_live_updates_match_id_id", "match_id", "id"),)
+    __table_args__ = (
+        Index("ix_live_updates_match_id_id", "match_id", "id"),
+        Index("ix_live_updates_published_created", "published_at", "created_at"),
+    )
 
 
 class HistoricalPlayerFetch(Base):
