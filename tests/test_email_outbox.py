@@ -113,7 +113,10 @@ def test_smtp_retry_backoff_then_expiration(monkeypatch):
         row = db.scalar(select(EmailDelivery))
         assert row.status == "pending" and row.attempts == 1
         assert row.failure_reason == "smtp_temporary_failure"
-        assert row.next_attempt_at > now
+        scheduled = row.next_attempt_at
+        if scheduled.tzinfo is None:
+            scheduled = scheduled.replace(tzinfo=timezone.utc)
+        assert scheduled > now
         assert drain_email_outbox(db, now=now + timedelta(seconds=1)) == {
             "sent": 0, "retried": 0, "expired": 0, "failed": 0,
         }
