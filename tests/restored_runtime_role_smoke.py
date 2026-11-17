@@ -191,9 +191,27 @@ def run() -> None:
                             "ALTER TABLE public.matches ADD COLUMN ci_bad integer",
                             "DROP TABLE public.matches",
                             "TRUNCATE TABLE public.matches",
-                            "GRANT INSERT ON public.matches TO PUBLIC",
                         ):
                             _assert_denied(app, forbidden)
+
+                        # PostgreSQL can emit only a WARNING (no exception)
+                        # for GRANT without grant option. Assert the EFFECT,
+                        # rather than treating a warning as a security breach.
+                        app.execute("SAVEPOINT ci_permission_grant_probe")
+                        try:
+                            app.execute("GRANT INSERT ON public.matches TO PUBLIC")
+                        except psycopg.errors.InsufficientPrivilege:
+                            app.execute("ROLLBACK TO SAVEPOINT ci_permission_grant_probe")
+                        else:
+                            app.execute(
+                                "SELECT has_table_privilege('PUBLIC', "
+                                "'public.matches', 'INSERT')"
+                            )
+                            unexpectedly_granted = app.fetchone()[0]
+                            app.execute("ROLLBACK TO SAVEPOINT ci_permission_grant_probe")
+                            assert not unexpectedly_granted, (
+                                "Runtime was able to grant INSERT to PUBLIC"
+                            )
                     runtime.rollback()
             finally:
                 # The distinct runtime connection is closed before cleaning
