@@ -27,6 +27,7 @@ Backend-only live football, U22 scouting and AI-analysis platform (work in progr
 - Disposable PostgreSQL 16 / Redis 7 integration CI, concurrent quota locking and migration roundtrip.
 - PostgreSQL SKIP LOCKED outbox publishing across workers and database-backed auth attempt limits.
 - HMAC-hashed one-time email confirmation and password reset codes, JWT session invalidation and dry-run cleanup CLI.
+- Authenticated password changes and password-confirmed all-device JWT revocation, plus optional bounded retention worker.
 
 ## Requirements
 Python 3.11+ or Docker, an API-Football key for real requests. No API key is needed for offline tests.
@@ -171,6 +172,22 @@ To preview expired auth bucket/code cleanup without mutation:
 `python -m app.maintenance_cli`; add `--execute --limit 1000` to delete
 up to 1,000 expired rows. This needs a trusted periodic scheduler.
 See [account recovery design](docs/ACCOUNT_RECOVERY.md).
+
+### Session security and maintenance (v0.15)
+Authenticated users can revoke all session JWTs with
+`POST /api/v1/auth/sessions/revoke-all` by submitting
+`{"current_password":"..."}`, or change their password with
+`POST /api/v1/auth/password/change` by submitting the current and
+new passwords. Both endpoints revoke **all** existing JWTs; users must
+sign in again. The compare-and-swap database update protects against
+stale concurrent sessions. No per-device selective logout is provided.
+
+The optional cleanup service runs only when explicitly enabled:
+`docker compose --profile maintenance up -d security-maintenance`.
+It deletes expired rate buckets and one-time tokens in bounded batches
+once per day. For a no-change preview, run
+`python -m app.maintenance_worker`.
+See [session security and maintenance](docs/SESSION_SECURITY.md).
 
 See [U22 design](docs/U22_SCOUTING_DESIGN.md) and
 [position/league cohort discovery v2](docs/U22_DISCOVERY_V2.md).
