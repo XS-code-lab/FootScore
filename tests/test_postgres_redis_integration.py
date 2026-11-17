@@ -258,3 +258,42 @@ def test_parallel_auth_attempts_do_not_bypass_login_budget(monkeypatch) -> None:
         buckets = db.scalars(select(AuthRateBucket)).all()
         assert len(buckets) == 1
         assert buckets[0].used == 10
+
+
+def test_two_parallel_password_resets_accept_one_token_only() -> None:
+    """PostgreSQL row lock prevents two consumers accepting the same code."""
+    from fastapi import HTTPException
+    from app.models import AuthOneTimeToken, User
+    from app.services.account_recovery import issue_code, reset_password
+    from app.security import hash_password
+
+    with SessionLocal.begin() as db:
+        user = User(email="reset-concurrent@example.com",
+                    password_hash=hash_password("OriginalPass123!"))
+        db.add(user)
+        db.flush()
+        user_id = user.id
+        code = issue_code(db, user, "reset_password")
+
+    gate = Barrier(2)
+
+    def consume() -> bool:
+        gate.wait(timeout=10)
+        try:
+            with SessionLocal() as db:
+                reset_password(db, code, "NewSecurePassword123!")
+            return True
+        except HTTPException as exc:
+            assert exc.status_code == 400
+            return False
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(lambda _: consume(), range(2)))
+    assert sorted(results) == [False, True]
+    with SessionLocal() as db:
+        user = db.get(User, user_id)
+        assert user.session_version == 1
+        token = db.scalar(select(AuthOneTimeToken).where(
+            AuthOneTimeToken.user_id == user_id,
+        ))
+        assert token.consumed_at is not None
