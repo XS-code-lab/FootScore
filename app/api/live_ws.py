@@ -3,13 +3,12 @@
 A snapshot is delivered at connect time; persistent updates are available
 through /matches/{id}/updates for reconnect/resume.
 """
-import json
-
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
 from redis.asyncio import from_url
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 
-from app.db import SessionLocal
+from app.db import SessionLocal, get_db
 from app.models import LiveUpdate, Match
 from app.services.live_updates import match_snapshot
 from app.settings import settings
@@ -38,7 +37,7 @@ async def live_match_socket(websocket: WebSocket, match_id: int) -> None:
         await websocket.send_json(snapshot)
         while True:
             message = await pubsub.get_message(ignore_subscribe_messages=True,
-                                               timeout=1.0)
+                                               timeout=15.0)
             if message and message.get("type") == "message":
                 await websocket.send_text(message["data"])
             else:
@@ -57,22 +56,21 @@ async def live_match_socket(websocket: WebSocket, match_id: int) -> None:
 
 
 @router.get("/matches/{match_id}/updates")
-def match_updates(match_id: int, after_id: int = 0, limit: int = 100) -> list[dict]:
-    from fastapi import HTTPException
-    from app.db import SessionLocal
-
-    if after_id < 0 or not 1 <= limit <= 200:
-        raise HTTPException(status_code=422, detail="Invalid cursor or limit")
-    with SessionLocal() as db:
-        if db.get(Match, match_id) is None:
-            raise HTTPException(status_code=404, detail="Match not found")
-        rows = db.scalars(
-            select(LiveUpdate).where(
-                LiveUpdate.match_id == match_id, LiveUpdate.id > after_id,
-            ).order_by(LiveUpdate.id).limit(limit)
-        ).all()
-        return [
-            {"id": row.id, "match_id": row.match_id, "kind": row.kind,
-             "data": row.payload, "created_at": row.created_at}
-            for row in rows
-        ]
+def match_updates(
+    match_id: int,
+    after_id: int = Query(default=0, ge=0),
+    limit: int = Query(default=100, ge=1, le=200),
+    db: Session = Depends(get_db),
+) -> list[dict]:
+    if db.get(Match, match_id) is None:
+        raise HTTPException(status_code=404, detail="Match not found")
+    rows = db.scalars(
+        select(LiveUpdate).where(
+            LiveUpdate.match_id == match_id, LiveUpdate.id > after_id,
+        ).order_by(LiveUpdate.id).limit(limit)
+    ).all()
+    return [
+        {"id": row.id, "match_id": row.match_id, "kind": row.kind,
+         "data": row.payload, "created_at": row.created_at}
+        for row in rows
+    ]
