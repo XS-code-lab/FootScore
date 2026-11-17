@@ -1,10 +1,10 @@
 """Bounded retention sweep for stale authentication state."""
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from app.models import AuthOneTimeToken, AuthRateBucket
+from app.models import AuthOneTimeToken, AuthRateBucket, EmailDelivery
 
 
 def cleanup_auth_state(
@@ -34,6 +34,13 @@ def cleanup_auth_state(
         "max_rows": limit,
     }
     if execute:
+        # Remove encrypted delivery payloads BEFORE deleting their token
+        # parent rows, so foreign keys work on both PostgreSQL and SQLite.
+        token_ids = [row.id for row in tokens]
+        if token_ids:
+            db.execute(delete(EmailDelivery).where(
+                EmailDelivery.token_id.in_(token_ids),
+            ))
         for row in (*expired, *tokens):
             db.delete(row)
         db.commit()
