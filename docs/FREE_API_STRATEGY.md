@@ -25,8 +25,15 @@ Official references:
 - Review provider redistribution, caching and attribution rules before a public launch.
 
 ## Implementation status
-Implemented: fixture adapter, normalized fixture model, idempotent fixture writes,
-basic relational models, API reads, development import CLI, local per-day quota accounting.
-Not implemented: multi-process-safe quota reservations, retries, 429 backoff, provider-side
-pagination, event and statistics collection, player identity matching, migration-based schema
-management, recurring tasks, Redis, live websockets, scouting or notifications.
+Implemented: fixture adapter, idempotent fixture/event/player-stat ingestion,
+PostgreSQL and SQLite daily quota reservation, versioned Alembic migrations,
+small pilot recurring sync, Redis/WebSocket match streams, U22 scouting,
+notification inbox and optional FCM outbox. Historical fixture-player backfill
+now has a quota-aware dry-run planner and local fetch receipt audit.
+
+Not implemented / not production-verified: global per-minute quota coordinator,
+429 exponential retry, provider account-wide usage reconciliation, full fixture
+and player-stat season completeness audit, cross-provider identity matching,
+complete VAR correctness, multi-worker outbox locking, live API load testing,
+real-device push validation or trained real-world ML outcome forecasting.
+Free-plan historical-season availability must be verified for each request.
