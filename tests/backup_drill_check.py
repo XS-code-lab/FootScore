@@ -64,7 +64,64 @@ def main() -> None:
                 next_attempt_at=match.observed_at,
                 created_at=match.observed_at,
             ))
-            print("Seeded synthetic backup fixture.")
+
+            # A larger, deliberately synthetic snapshot exercises streaming
+            # row-by-row verification without ever using customer data.
+            extra_matches = [
+                Match(
+                    provider="ci-synthetic",
+                    provider_id=f"ci-recovery-load-{i:04d}",
+                    status="FT", home_score=i % 5, away_score=i % 3,
+                )
+                for i in range(180)
+            ]
+            db.add_all(extra_matches)
+            db.flush()
+            db.add_all([
+                LiveUpdate(
+                    match_id=item.id, kind="ci_load_update",
+                    payload={
+                        "match_index": index, "event_index": event,
+                        "score": {"home": index % 5, "away": event % 3},
+                    },
+                )
+                for index, item in enumerate(extra_matches)
+                for event in range(8)
+            ])
+            extra_users = [
+                User(
+                    email=f"ci-recovery-load-{i:03d}@example.invalid",
+                    password_hash="synthetic-hash-not-real",
+                )
+                for i in range(30)
+            ]
+            db.add_all(extra_users)
+            db.flush()
+            extra_tokens = [
+                AuthOneTimeToken(
+                    user_id=item.id, purpose="verify_email",
+                    token_hash=f"{i + 1:064x}",
+                    created_at=match.observed_at,
+                    expires_at=match.observed_at,
+                )
+                for i, item in enumerate(extra_users)
+            ]
+            db.add_all(extra_tokens)
+            db.flush()
+            db.add_all([
+                EmailDelivery(
+                    token_id=item.id,
+                    encrypted_code=f"ci-synthetic-ciphertext-{i}",
+                    status="pending", attempts=1,
+                    next_attempt_at=match.observed_at,
+                    created_at=match.observed_at,
+                )
+                for i, item in enumerate(extra_tokens)
+            ])
+            print(
+                "Seeded synthetic snapshot: 181 matches, 1441 match updates, "
+                "31 accounts and 31 encrypted delivery records."
+            )
         else:
             match = db.scalar(select(Match).where(
                 Match.provider_id == SENTINEL,
