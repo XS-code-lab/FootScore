@@ -12,6 +12,8 @@ Backend-only live football, U22 scouting and AI-analysis platform (work in progr
 - Per-fixture player ratings/minutes/goals/assists and targeted player profile enrichment.
 - Read-only U22 established and emerging leaderboards with sample-size shrinkage.
 - Read endpoints for match event timelines and team match statistics.
+- User registration/login, authenticated favorites, notification preferences and inbox.
+- One-time goal, assist and final rating alerts with optional FCM push outbox.
 
 ## Requirements
 Python 3.11+ or Docker, an API-Football key for real requests. No API key is needed for offline tests.
@@ -70,8 +72,15 @@ Additional API endpoints:
 This U22 leaderboard is a transparent sample-adjusted baseline, **not an AI
 potential prediction**, and is not adjusted for league strength or position.
 Only completed fixtures and players with verified DOB and provider rating count.
+Authentication requires a strong `JWT_SECRET` environment variable (32+ characters).
+Set it before using register/login with JWT. Run `alembic upgrade head` again.
+Optional push dispatcher: install `pip install -e '.[push]'`, configure
+Firebase Admin credentials, register a device from an authenticated client
+and run `python -m app.push_cli` in a trusted worker environment.
+See [notifications design](docs/NOTIFICATIONS_DESIGN.md).
+
 The app is not yet production-ready: no live WebSocket, event correction
-reconciliation, Redis, AI, favorites or notifications yet.
+reconciliation, Redis, AI scouting, login rate limits or refresh tokens yet.
 
 See [U22 design](docs/U22_SCOUTING_DESIGN.md).
 
