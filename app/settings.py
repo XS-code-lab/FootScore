@@ -1,3 +1,4 @@
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -9,6 +10,8 @@ class Settings(BaseSettings):
     provider_reserve: int = 10
     sync_leagues: str = ""
     sync_interval_minutes: int = 360
+    jwt_secret: SecretStr | None = None
+    access_token_minutes: int = 60
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
