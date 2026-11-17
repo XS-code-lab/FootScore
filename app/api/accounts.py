@@ -95,8 +95,6 @@ def register(
     # Generate a code only if a secure SMTP sender has been configured.
     # Do not expose the one-time code in an HTTP response or in logs.
     if account_recovery.email_is_configured():
-        with db.begin():
-            pass
         account_recovery.request_code(db, user.email, "verify_email")
     return {"id": user.id, "email": user.email}
 
@@ -117,6 +115,40 @@ def login(
         "access_token": issue_token(user.id, user.session_version),
         "token_type": "bearer",
     }
+
+
+@router.post("/auth/verification/request", status_code=202)
+def request_email_verification(
+    data: EmailRequest, request: Request, db: Session = Depends(get_db),
+) -> dict:
+    check_auth_limit(db, request, "verify")
+    account_recovery.request_code(db, _email(data.email), "verify_email")
+    return {"message": "If eligible, a verification email will be sent"}
+
+
+@router.post("/auth/verification/confirm")
+def confirm_email_verification(
+    data: OneTimeCode, db: Session = Depends(get_db),
+) -> dict:
+    account_recovery.verify_email(db, data.token)
+    return {"email_verified": True}
+
+
+@router.post("/auth/password-reset/request", status_code=202)
+def request_password_reset(
+    data: EmailRequest, request: Request, db: Session = Depends(get_db),
+) -> dict:
+    check_auth_limit(db, request, "reset")
+    account_recovery.request_code(db, _email(data.email), "reset_password")
+    return {"message": "If eligible, a password reset email will be sent"}
+
+
+@router.post("/auth/password-reset/confirm")
+def confirm_password_reset(
+    data: PasswordResetConfirm, db: Session = Depends(get_db),
+) -> dict:
+    account_recovery.reset_password(db, data.token, data.new_password)
+    return {"password_reset": True}
 
 
 @router.get("/auth/me")
