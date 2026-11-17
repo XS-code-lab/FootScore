@@ -15,7 +15,9 @@ def event_kind(item: dict) -> str:
     kind = str(item.get("type") or "").lower()
     detail = str(item.get("detail") or "").lower()
     if kind == "goal":
-        return "goal"
+        return ("goal_disallowed" if any(
+            word in detail for word in ("cancel", "disallow", "annul")
+        ) else "goal")
     if kind == "card":
         return "red_card" if "red" in detail else "yellow_card"
     if kind in {"subst", "substitution"}:
