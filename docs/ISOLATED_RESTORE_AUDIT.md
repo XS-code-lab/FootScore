@@ -106,6 +106,13 @@ have the safe disposable name and cannot equal `PGDATABASE`.
 
 ## Limits and interpretation
 
+Starting in v0.24 the restore command also measures four stages
+(download/authenticate, decrypt, PostgreSQL restore and schema audit),
+with an optional `--max-drill-seconds` operator budget. The read-only
+audit checks unvalidated PostgreSQL foreign-key constraints. These
+numbers are **not** a production RTO/RPO; see
+[recovery measurements](RECOVERY_MEASUREMENTS.md).
+
 The report deliberately marks:
 - `cryptographic_integrity_verified`: true only when the recovery
   command actually authenticated the downloaded encrypted archive.
