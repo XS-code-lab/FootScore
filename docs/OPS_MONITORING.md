@@ -100,6 +100,7 @@ replay-truncation behavior.
 Configure a trusted metrics exporter, authenticated monitoring and
 on-call alert delivery; verify Redis and SMTP externally; measure
 queue-lag distributions and provider upstream behavior; add load tests
-and service-level objectives; implement backups and restore drills,
-worker health probes and provider-request-log retention. The new CLI
-does not send automatic alerts or schedule itself.
+and service-level objectives; set up encrypted scheduled off-site backups and production-sized restore drills,
+worker health probes and provider-request-log retention. A synthetic PostgreSQL backup/isolated restore drill has been added in
+v0.18 (see BACKUP_RESTORE_DRILL.md), but no scheduled offsite backups
+exist. The new CLI does not send automatic alerts or schedule itself.
