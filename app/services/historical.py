@@ -5,10 +5,12 @@ The planner is offline and never makes HTTP calls.
 """
 from datetime import date, datetime, time, timedelta, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models import HistoricalPlayerFetch, Match, ProviderQuota
+from app.models import (
+    HistoricalPlayerFetch, Match, ProviderQuota, ProviderRequestLog,
+)
 from app.settings import settings
 
 FINAL_STATUSES = frozenset(("FT", "AET", "PEN"))
@@ -108,12 +110,18 @@ def plan_historical_backfill(
         ProviderQuota.provider == "api-football",
         ProviderQuota.day == today,
     )) or 0
-    # This is a local accounting estimate; another application sharing
-    # the provider key may have already consumed requests.
+    # Conservative local estimate; other apps sharing a key aren't visible.
     locally_available = max(
         0, settings.provider_daily_limit - settings.provider_reserve - usage
     )
-    selected = pending[:min(max_requests, locally_available)]
+    now = datetime.now(timezone.utc)
+    recent = db.scalar(select(func.count()).select_from(ProviderRequestLog).where(
+        ProviderRequestLog.provider == "api-football",
+        ProviderRequestLog.reserved_at > now - timedelta(seconds=60),
+        ProviderRequestLog.reserved_at <= now,
+    )) or 0
+    remaining_minute = max(0, settings.provider_per_minute_limit - recent)
+    selected = pending[:min(max_requests, locally_available, remaining_minute)]
     return {
         "competition_id": competition_id,
         "window_start": report["window_start"],
@@ -122,6 +130,8 @@ def plan_historical_backfill(
         "estimated_api_calls": len(selected),
         "locally_recorded_requests_today": usage,
         "local_remaining_budget": locally_available,
+        "locally_recorded_requests_last_60_seconds": recent,
+        "local_remaining_minute_budget": remaining_minute,
         "provider_remaining_budget_confirmed": False,
         "max_requests": max_requests,
         "retry_empty": retry_empty,
