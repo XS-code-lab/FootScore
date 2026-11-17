@@ -5,7 +5,6 @@ within a competition/position cohort, not probabilities of future success.
 """
 from collections import defaultdict
 from datetime import date, datetime, time, timedelta, timezone
-from math import sqrt
 from statistics import fmean, pstdev
 
 from sqlalchemy import select
@@ -211,7 +210,7 @@ def discover_u22(
             )
             features, metric_coverage = _features(total)
             signals = []
-            if delta is not None and delta >= 1.0 and confidence >= 0.08:
+            if delta is not None and delta >= 1.0 and confidence >= 0.05:
                 signals.append("rating_above_position_league_peers")
             if (
                 group in {"attacker", "midfielder"}
