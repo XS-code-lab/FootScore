@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import Match, MatchEvent, Player, Team, TeamMatchStat
+from app.services.notifications import notify_new_event
 
 
 def event_kind(item: dict) -> str:
@@ -64,6 +65,7 @@ def _ensure_player(db: Session, raw: dict | None) -> int | None:
 def upsert_match_events(db: Session, match: Match, events: list[dict]) -> int:
     """Idempotently merge one complete event snapshot for an existing match."""
     seen: dict[str, int] = {}
+    new_events: list[MatchEvent] = []
     count = 0
     for item in events:
         base_id = event_identity(item, 0).split(":")[0]
@@ -83,6 +85,7 @@ def upsert_match_events(db: Session, match: Match, events: list[dict]) -> int:
                 match_id=match.id, kind=event_kind(item),
             )
             db.add(row)
+            new_events.append(row)
         row.player_id = player_id
         raw_time = item.get("time") or {}
         row.minute = raw_time.get("elapsed")
@@ -90,6 +93,9 @@ def upsert_match_events(db: Session, match: Match, events: list[dict]) -> int:
         row.payload = item
         row.observed_at = datetime.now(timezone.utc)
         count += 1
+    db.flush()
+    for new_event in new_events:
+        notify_new_event(db, match, new_event)
     db.flush()
     return count
 
