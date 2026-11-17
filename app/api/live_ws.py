@@ -1,8 +1,6 @@
-"""Public match-only WebSocket stream via Redis pub/sub.
+"""Public match-only WebSocket stream with durable replay through REST."""
+import asyncio
 
-A snapshot is delivered at connect time; persistent updates are available
-through /matches/{id}/updates for reconnect/resume.
-"""
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
 from redis.asyncio import from_url
 from sqlalchemy import select
@@ -27,22 +25,38 @@ async def live_match_socket(websocket: WebSocket, match_id: int) -> None:
         return
     redis = from_url(settings.redis_url, decode_responses=True)
     pubsub = redis.pubsub()
+    inbound = None
     try:
         await pubsub.subscribe(f"footscore:match:{match_id}")
-        # Redis is subscribed before reading snapshot, avoiding missed DB
-        # changes while connecting (duplicates can occur and are keyed by id).
+        # Subscribe before reading the DB snapshot: buffered Redis messages can
+        # repeat data from the snapshot, but won't be silently missed.
         with SessionLocal() as db:
             snapshot = match_snapshot(db, match_id)
         await websocket.accept()
         await websocket.send_json(snapshot)
+        inbound = asyncio.create_task(websocket.receive())
         while True:
-            message = await pubsub.get_message(ignore_subscribe_messages=True,
-                                               timeout=15.0)
-            if message and message.get("type") == "message":
-                await websocket.send_text(message["data"])
+            outbound = asyncio.create_task(
+                pubsub.get_message(ignore_subscribe_messages=True, timeout=5.0)
+            )
+            done, _ = await asyncio.wait(
+                {inbound, outbound}, return_when=asyncio.FIRST_COMPLETED
+            )
+            if inbound in done:
+                incoming = inbound.result()
+                if incoming["type"] == "websocket.disconnect":
+                    if not outbound.done():
+                        outbound.cancel()
+                        await asyncio.gather(outbound, return_exceptions=True)
+                    break
+                inbound = asyncio.create_task(websocket.receive())
+            if outbound in done:
+                message = outbound.result()
+                if message and message.get("type") == "message":
+                    await websocket.send_text(message["data"])
             else:
-                # Ping to detect a client disconnect even if Redis has no events.
-                await websocket.send_json({"type": "heartbeat"})
+                outbound.cancel()
+                await asyncio.gather(outbound, return_exceptions=True)
     except WebSocketDisconnect:
         pass
     except Exception:
@@ -51,6 +65,9 @@ async def live_match_socket(websocket: WebSocket, match_id: int) -> None:
         except RuntimeError:
             pass
     finally:
+        if inbound is not None and not inbound.done():
+            inbound.cancel()
+            await asyncio.gather(inbound, return_exceptions=True)
         await pubsub.aclose()
         await redis.aclose()
 
