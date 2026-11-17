@@ -52,7 +52,8 @@ def match_events(match_id: int, db: Session = Depends(get_db)) -> list[dict]:
     if db.get(Match, match_id) is None:
         raise HTTPException(status_code=404, detail="Match not found")
     rows = db.scalars(
-        select(MatchEvent).where(MatchEvent.match_id == match_id)
+        select(MatchEvent).where(MatchEvent.match_id == match_id,
+                                 MatchEvent.is_active.is_(True))
         .order_by(MatchEvent.minute, MatchEvent.id)
     ).all()
     return [
