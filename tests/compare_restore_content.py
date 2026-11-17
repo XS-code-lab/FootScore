@@ -122,12 +122,14 @@ def main() -> None:
     ):
         parser.error("Only disposable GitHub Actions PostgreSQL integration is supported")
     source = os.environ.get("PGDATABASE", "")
-    if (
-        not source or source.startswith("footscore_restore_")
-        or not args.target.startswith("footscore_restore_")
-        or args.target == source
-    ):
-        parser.error("Restore comparison requires separate disposable target")
+    from app.restore_audit import validate_drill_target
+
+    try:
+        validate_drill_target(args.target, source)
+    except ValueError:
+        parser.error("Restore comparison requires a safe disposable target")
+    if not source or source.startswith("footscore_restore_"):
+        parser.error("Source must be a non-disposable CI test database")
     try:
         result = summarize_comparison(manifest(source), manifest(args.target))
     except Exception:
