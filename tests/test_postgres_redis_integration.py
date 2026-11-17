@@ -41,7 +41,7 @@ def test_migrations_and_concurrent_postgres_quota_reservations() -> None:
     with engine.connect() as connection:
         assert connection.execute(
             text("SELECT version_num FROM alembic_version")
-        ).scalar_one() == "0010_email_delivery_outbox"
+        ).scalar_one() == "0011_match_outbox_index"
 
     workers = 6
     gate = Barrier(workers)
