@@ -21,6 +21,9 @@ def test_initial_upgrade_and_downgrade(tmp_path: Path, monkeypatch) -> None:
             "provider_request_log", "league_coverage_probes",
             "auth_rate_buckets", "auth_one_time_tokens",
             "email_deliveries"} <= tables
+    assert "ix_live_updates_published_created" in {
+        ix["name"] for ix in inspect(engine).get_indexes("live_updates")
+    }
     command.downgrade(cfg, "base")
     assert "matches" not in inspect(engine).get_table_names()
     assert "team_match_stats" not in inspect(engine).get_table_names()
