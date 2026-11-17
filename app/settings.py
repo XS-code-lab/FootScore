@@ -7,6 +7,8 @@ class Settings(BaseSettings):
     api_football_base_url: str = "https://v3.football.api-sports.io"
     provider_daily_limit: int = 100
     provider_reserve: int = 10
+    sync_leagues: str = ""
+    sync_interval_minutes: int = 360
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
