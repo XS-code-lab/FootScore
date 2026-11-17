@@ -94,6 +94,7 @@ class PlayerMatchStats(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     match_id: Mapped[int] = mapped_column(ForeignKey("matches.id"), nullable=False)
     player_id: Mapped[int] = mapped_column(ForeignKey("players.id"), nullable=False)
+    team_id: Mapped[int | None] = mapped_column(ForeignKey("teams.id"))
     minutes: Mapped[int | None] = mapped_column(Integer)
     goals: Mapped[int | None] = mapped_column(Integer)
     assists: Mapped[int | None] = mapped_column(Integer)
