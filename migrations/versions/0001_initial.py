@@ -15,8 +15,16 @@ depends_on = None
 
 
 def upgrade() -> None:
-    Base.metadata.create_all(bind=op.get_bind())
+    initial_tables = [
+        table for table in Base.metadata.sorted_tables
+        if table.name != "team_match_stats"
+    ]
+    Base.metadata.create_all(bind=op.get_bind(), tables=initial_tables)
 
 
 def downgrade() -> None:
-    Base.metadata.drop_all(bind=op.get_bind())
+    initial_tables = [
+        table for table in Base.metadata.sorted_tables
+        if table.name != "team_match_stats"
+    ]
+    Base.metadata.drop_all(bind=op.get_bind(), tables=initial_tables)
