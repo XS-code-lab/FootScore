@@ -67,7 +67,7 @@ def test_idempotent_live_data_and_read_api() -> None:
         db.commit()
         assert db.scalar(select(func.count()).select_from(MatchEvent)) == 3
         assert db.scalar(select(func.count()).select_from(TeamMatchStat)) == 3
-        assert db.scalar(select(func.count()).select_from(Player)) == 3
+        assert db.scalar(select(func.count()).select_from(Player)) == 4
         match_id = match.id
 
     def override_db():
