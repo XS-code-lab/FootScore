@@ -232,6 +232,7 @@ def inbox(
             "id": row.id, "type": row.kind, "player_id": row.player_id,
             "match_id": row.match_id, "data": row.payload,
             "created_at": row.created_at, "read_at": row.read_at,
+            "invalidated_at": row.invalidated_at,
         }
         for row in db.scalars(statement)
     ]
