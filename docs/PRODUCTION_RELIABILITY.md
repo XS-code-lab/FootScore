@@ -60,7 +60,9 @@ corresponding key. There is no Redis dependency for authentication.
 - Stale bucket rows accumulate until `python -m app.maintenance_cli --execute`
   is called by a trusted periodic job (dry run by default).
 - Backend v0.14 adds one-time HMAC-hashed email verification/password reset
-  codes and revocable JWT session versions. See ACCOUNT_RECOVERY.md.
+  codes and revocable JWT session versions. Backend v0.15 adds authenticated
+  all-device logout, password change, and optional bounded maintenance.
+  See ACCOUNT_RECOVERY.md and SESSION_SECURITY.md.
 - No login cooldown, MFA, refresh tokens, durable email send queue,
   IP anomaly signals or email verification have been added.
 
