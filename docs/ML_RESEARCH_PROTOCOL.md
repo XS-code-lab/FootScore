@@ -63,6 +63,16 @@ For each row, an auditor must:
 5. Do not use a label that was unavailable as of the earlier training
    decision date. Do not include future outcomes in feature fields.
 
+To prepare human review of the NEXT season, use:
+```bash
+python -m app.ml.cli propose-outcomes --input data/ml/unverified.jsonl --output data/ml/outcome-review.jsonl
+```
+This records observed local next-season minutes and whether 900 has been
+reached in the *local archive*, but never assigns any training label or
+claims fixture/player coverage is complete. A zero may reflect missing
+provider data rather than an actual nonappearance. Consult
+[historical backfill documentation](HISTORICAL_BACKFILL.md).
+
 No valid labels are fabricated by this repository. Neither this tool nor
 users should treat simple missing match rows as a verified zero.
 
