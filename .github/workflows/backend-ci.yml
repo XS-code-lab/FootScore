@@ -102,8 +102,7 @@ jobs:
             exit 1
           fi
           rm -f "$RUNNER_TEMP/footscore-ci-backup/tampered.fsbak"
-          rm -f "$RUNNER_TEMP/footscore-ci-backup/restore-input.dump"
-          rm -f "$RUNNER_TEMP/footscore-ci-backup/ci.dump.fsbak"
+          rm -f "$RUNNER_TEMP/footscore-ci-backup/ci.dump"
           python -m app.backup_crypto decrypt \
             --input "$RUNNER_TEMP/footscore-ci-backup/ci.dump.fsbak" \
             --output "$RUNNER_TEMP/footscore-ci-backup/restore-input.dump"
@@ -129,4 +128,5 @@ jobs:
           docker run --rm --network host \
             -e PGHOST -e PGPORT -e PGUSER -e PGPASSWORD \
             postgres:16-alpine dropdb --maintenance-db=postgres footscore_restore_ci
-          rm -f "$RUNNER_TEMP/footscore-ci-backup/ci.dump"
+          rm -f "$RUNNER_TEMP/footscore-ci-backup/restore-input.dump"
+          rm -f "$RUNNER_TEMP/footscore-ci-backup/ci.dump.fsbak"
