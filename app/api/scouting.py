@@ -1,5 +1,5 @@
 """Public read-only player statistics and preliminary U22 scouting routes."""
-from datetime import date
+from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
@@ -69,7 +69,7 @@ def u22_leaderboard(
 ) -> dict:
     return {
         "category": category,
-        "as_of": as_of or date.today(),
+        "as_of": as_of or datetime.now(timezone.utc).date(),
         "min_minutes": min_minutes,
         "scope": "completed_fixtures_with_available_birth_dates_and_provider_ratings",
         "league_adjusted": False,
