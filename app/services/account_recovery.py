@@ -35,7 +35,7 @@ def _token_hash(token: str) -> str:
     # HMAC also protects if the database is exposed; JWT_SECRET must stay private.
     return hmac.new(
         _jwt_secret().encode("utf-8"),
-        token.encode("ascii"), hashlib.sha256,
+        token.encode("utf-8"), hashlib.sha256,
     ).hexdigest()
 
 
