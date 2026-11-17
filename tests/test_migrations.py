@@ -14,6 +14,7 @@ def test_initial_upgrade_and_downgrade(tmp_path: Path, monkeypatch) -> None:
     command.upgrade(cfg, "head")
     engine = create_engine(url)
     tables = set(inspect(engine).get_table_names())
-    assert {"matches", "players", "provider_quota", "alembic_version"} <= tables
+    assert {"matches", "players", "provider_quota", "team_match_stats", "alembic_version"} <= tables
     command.downgrade(cfg, "base")
     assert "matches" not in inspect(engine).get_table_names()
+    assert "team_match_stats" not in inspect(engine).get_table_names()
