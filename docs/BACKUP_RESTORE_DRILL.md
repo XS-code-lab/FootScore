@@ -98,10 +98,11 @@ user data.
 
 ## Remaining work
 
-No remote backup schedule, cloud object store, automated at-rest encryption,
-offsite retention, alerting, RPO/RTO target, point-in-time
+No automatically provisioned cloud object store, remote retention,
+production scheduling deployment, alerting, RPO/RTO target, point-in-time
 recovery (PITR) / WAL archiving, realistic large-data restore time
 benchmark, high-availability failover or production-sized backup
-validation is included. The run is a **small synthetic restore drill**
+validation is included. v0.20 adds an *opt-in* S3-compatible encrypted
+upload worker, tested only against mock S3 (see REMOTE_BACKUP_SCHEDULER.md). The run is a **small synthetic restore drill**
 that proves basic compatibility with PostgreSQL 16, not disaster
 recovery readiness at scale.
