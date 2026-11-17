@@ -123,3 +123,16 @@ class ProviderQuota(Base):
     day: Mapped[date] = mapped_column(Date, nullable=False)
     used: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     __table_args__ = (UniqueConstraint("provider", "day"),)
+
+
+class TeamMatchStat(Base):
+    __tablename__ = "team_match_stats"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    match_id: Mapped[int] = mapped_column(ForeignKey("matches.id"), nullable=False)
+    team_id: Mapped[int] = mapped_column(ForeignKey("teams.id"), nullable=False)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    value: Mapped[object | None] = mapped_column(JSON, nullable=True)
+    observed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False,
+    )
+    __table_args__ = (UniqueConstraint("match_id", "team_id", "name"),)
