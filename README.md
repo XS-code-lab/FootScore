@@ -22,6 +22,8 @@ Backend-only live football, U22 scouting and AI-analysis platform (work in progr
 - One-time goal, assist and final rating alerts with optional FCM push outbox.
 - Correction-aware live event reconciliation, retracted notifications, match update outbox.
 - Redis Pub/Sub WebSocket stream plus cursor-based REST replay of match changes.
+- Synthetic end-to-end pilot smoke tests for provider -> ingestion -> scouting/alerts -> outbox.
+- Explicit provider HTTP 429 handling without unlimited retries and database connectivity readiness.
 
 ## Requirements
 Python 3.11+ or Docker, an API-Football key for real requests. No API key is needed for offline tests.
@@ -32,11 +34,17 @@ python -m venv .venv
 pip install -e '.[dev]'
 alembic upgrade head
 pytest -q
+# Run the separate cross-service smoke test (no external API calls):
+pytest -q tests/test_pilot_e2e.py
 uvicorn app.main:app --reload
 ```
 
 Use `DATABASE_URL` in `.env` for persistent DB; development default is SQLite.
 Swagger: http://127.0.0.1:8000/docs
+
+`GET /health` is only process liveness. `GET /ready` checks database connectivity
+but does not certify migrations, Redis or provider access. See
+[pilot E2E smoke documentation](docs/PILOT_E2E_SMOKE.md).
 
 ## Postgres with Compose
 Copy `.env.example` to `.env`; replace POSTGRES_PASSWORD with a **URL-safe random string**.
@@ -109,6 +117,9 @@ This remains a development baseline: provider event IDs and VAR corrections
 need more validation, and Redis publisher coordination, backpressure, API
 rate limiting, stronger auth/account lifecycle and trained AI scouting remain pending.
 Real device push and end-to-end production deployment are unverified.
+Provider 429 responses stop the current request and expose a Retry-After hint
+when numeric; no automatic retry or unreserved repeat requests are made.
+The E2E smoke uses mock provider responses and fake Redis, not real data.
 
 See [U22 design](docs/U22_SCOUTING_DESIGN.md) and
 [position/league cohort discovery v2](docs/U22_DISCOVERY_V2.md).
