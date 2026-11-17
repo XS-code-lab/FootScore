@@ -86,6 +86,9 @@ six critical tables, and an observed audit duration). It also tests
 phase timing reports and duration budgets, and retains the
 object-by-object synthetic restore comparison.
 
+Version 0.26 also checks restored indexes/constraints/sequence state and
+synthetic FastAPI requests and writes. See RESTORED_BACKEND_CHECKS.md.
+
 Version 0.25 additionally verifies the *full content* of every public
 application table against the static, synthetic CI source after isolated
 restore. That comparison is limited to a **quiescent CI database**, not
