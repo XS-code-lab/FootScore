@@ -143,5 +143,12 @@ actual PostgreSQL tools into an isolated database, and separately
 runs `app.restore_audit verify` plus the existing synthetic
 object-by-object comparison checks.
 
+The v0.25 disposable CI pipeline also compares full-row SHA-256 digests
+and counts of every public PostgreSQL table between a static synthetic
+source and the isolated restored target. It is **not** enabled in the
+operator-facing live restore command because changing production data
+would invalidate a direct post-dump source comparison. See
+RESTORE_CONTENT_INTEGRITY.md.
+
 None of those tests access real AWS, a real football provider, real
 SMTP or user data.
