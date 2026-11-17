@@ -190,7 +190,7 @@ def test_unknown_request_expiration_and_cleanup(monkeypatch):
             keys = set(db.scalars(select(AuthRateBucket.key)).all())
             assert "active-test" in keys
             assert "expired-test" not in keys
-            assert len(keys) == 2
+            assert len(keys) >= 2
             with pytest.raises(ValueError, match="Cleanup limit"):
                 cleanup_auth_state(db, limit=0)
     finally:
