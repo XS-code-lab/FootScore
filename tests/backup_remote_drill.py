@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from app.backup_inventory import inspect_remote_backups
+from app.restore_audit import restore_once
 
 from app.backup_remote import (
     fetch_and_verify_encrypted_archive, store_encrypted_archive,
@@ -89,6 +90,33 @@ def main() -> None:
     assert report["retention_plan"]["candidate_count"] == 0
     assert s3.calls == ["put", "head", "get", "list"]
     assert args.downloaded.read_bytes() == args.encrypted.read_bytes()
+
+    # Exercise the recovery orchestrator using the actual PGDMP archive.
+    # CI subsequently runs the *real* postgres:16 pg_restore and SQL audit.
+    preview = restore_once(
+        bucket=BUCKET, key=KEY, target="footscore_restore_ci_routing",
+    )
+    assert preview["dry_run"] and not preview["remote_download"]
+
+    def check_archive(argv, **kwargs):
+        assert argv[0] == "sh"
+        assert argv[-1] == "footscore_restore_ci_routing"
+        assert kwargs["check"] is True
+        assert kwargs["timeout"] == 900
+        with Path(argv[2]).open("rb") as stream:
+            assert stream.read(5) == b"PGDMP"
+
+    recovered = restore_once(
+        bucket=BUCKET, key=KEY, target="footscore_restore_ci_routing",
+        execute=True, s3=s3, runner=check_archive,
+        auditor=lambda target: {
+            "target": target, "schema_matches_current_head": True,
+            "note": "Full SQL checks execute separately against real pg_restore",
+        },
+    )
+    assert recovered["cryptographic_integrity_verified"]
+    assert recovered["audit"]["schema_matches_current_head"]
+    assert s3.calls == ["put", "head", "get", "list", "get"]
     print("Mock S3 upload + authenticated download of real CI archive succeeded.")
 
 
