@@ -108,6 +108,10 @@ v0.21 adds an *independent, read-only* S3 inventory CLI for freshness
 monitoring and retention **proposals**. It neither deletes remote objects
 nor proves recoverability; see [backup retention and freshness](BACKUP_RETENTION.md).
 
+Backup visibility alerts are available as a **separate, opt-in**
+HTTPS webhook worker in v0.22. Its S3 checks are read-only and its
+PostgreSQL state suppresses duplicates (see BACKUP_ALERTS.md).
+
 The safest design uses workload identity with permission to PUT only
 to a dedicated private bucket/prefix plus HEAD for checking, not broad
 bucket deletion. Cloud infrastructure must also enforce private
