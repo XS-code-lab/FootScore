@@ -342,3 +342,59 @@ def test_concurrent_all_sessions_revocations_are_compare_and_swap(monkeypatch) -
     assert sorted(results) == [False, True]
     with SessionLocal() as db:
         assert db.get(User, user_id).session_version == old_version + 1
+
+
+def test_parallel_postgres_email_workers_send_each_code_once(monkeypatch) -> None:
+    """Two email workers claim distinct encrypted messages via SKIP LOCKED."""
+    from cryptography.fernet import Fernet
+    from pydantic import SecretStr
+
+    from app.models import AuthOneTimeToken, EmailDelivery, User
+    from app.services import account_recovery
+    from app.services.email_outbox import drain_email_outbox
+
+    monkeypatch.setattr(settings, "jwt_secret", SecretStr("ci-email-code-test-" * 3))
+    monkeypatch.setattr(
+        settings, "email_queue_key", SecretStr(Fernet.generate_key().decode()),
+    )
+    monkeypatch.setattr(settings, "smtp_host", "smtp.mock.example")
+    monkeypatch.setattr(settings, "smtp_username", "ci")
+    monkeypatch.setattr(settings, "smtp_password", SecretStr("ci-mock-only"))
+    monkeypatch.setattr(settings, "smtp_sender", "ci@example.test")
+    sent = []
+    monkeypatch.setattr(
+        account_recovery, "send_email_code",
+        lambda address, code, purpose: sent.append((address, code, purpose)),
+    )
+    for n in range(2):
+        email = f"email-worker-{n}@example.test"
+        with SessionLocal.begin() as db:
+            db.add(User(email=email, password_hash="ci-not-a-real-password"))
+        with SessionLocal() as db:
+            account_recovery.request_code(db, email, "verify_email")
+    with SessionLocal() as db:
+        assert db.scalar(select(func.count()).select_from(
+            EmailDelivery
+        ).where(EmailDelivery.status == "pending")) == 2
+    gate = Barrier(2)
+
+    def publish_one() -> dict:
+        gate.wait(timeout=10)
+        with SessionLocal.begin() as db:
+            return drain_email_outbox(db, limit=1)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(lambda _: publish_one(), range(2)))
+    assert [r["sent"] for r in results] == [1, 1]
+    assert len(sent) == 2
+    assert {row[0] for row in sent} == {
+        "email-worker-0@example.test", "email-worker-1@example.test",
+    }
+    with SessionLocal() as db:
+        deliveries = db.scalars(select(EmailDelivery)).all()
+        assert len(deliveries) == 2
+        assert all(row.status == "sent" and row.encrypted_code is None
+                   for row in deliveries)
+        assert db.scalar(select(func.count()).select_from(
+            AuthOneTimeToken
+        ).where(AuthOneTimeToken.consumed_at.is_(None))) == 2
