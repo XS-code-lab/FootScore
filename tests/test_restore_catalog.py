@@ -1,7 +1,7 @@
 """Restored PostgreSQL catalogs must match beyond table row contents."""
 from copy import deepcopy
 
-from tests.compare_restore_catalog import summarize_catalogs
+from tests.compare_restore_catalog import canonical_constraint, summarize_catalogs
 
 
 def baseline() -> dict:
@@ -77,3 +77,68 @@ def test_missing_or_added_constraints_fail() -> None:
         "new_check", "users.users_email_key",
     ]
     assert result["catalogs_match"] is False
+
+
+def test_pg_dump_equivalent_varchar_array_cast_rewrite_is_recognized() -> None:
+    name = "auth_one_time_tokens.auth_one_time_tokens_purpose_check"
+    source = (
+        "c", True,
+        "CHECK (purpose::text = ANY (ARRAY['verify_email'::character varying, "
+        "'reset_password'::character varying]::text[]))",
+    )
+    restored = (
+        "c", True,
+        "CHECK (purpose::text = ANY (ARRAY['verify_email'::character varying::text, "
+        "'reset_password'::character varying::text]))",
+    )
+    assert canonical_constraint(name, source) == canonical_constraint(name, restored)
+    left = baseline()
+    left["constraints"][name] = source
+    right = deepcopy(left)
+    right["constraints"][name] = restored
+    assert summarize_catalogs(left, right)["catalogs_match"]
+
+
+def test_pg_dump_equivalence_does_not_hide_changed_enum_values_or_columns() -> None:
+    name = "email_deliveries.email_deliveries_status_check"
+    source = (
+        "c", True,
+        "CHECK (status::text = ANY (ARRAY['pending'::character varying, "
+        "'sent'::character varying]::text[]))",
+    )
+    same = (
+        "c", True,
+        "CHECK (status::text = ANY (ARRAY['pending'::character varying::text, "
+        "'sent'::character varying::text]))",
+    )
+    replaced_status = (
+        "c", True,
+        "CHECK (status::text = ANY (ARRAY['pending'::character varying::text, "
+        "'failed'::character varying::text]))",
+    )
+    replaced_field = (
+        "c", True,
+        "CHECK (purpose::text = ANY (ARRAY['pending'::character varying::text, "
+        "'sent'::character varying::text]))",
+    )
+    assert canonical_constraint(name, source) == canonical_constraint(name, same)
+    assert canonical_constraint(name, source) != canonical_constraint(name, replaced_status)
+    assert canonical_constraint(name, source) != canonical_constraint(name, replaced_field)
+    assert canonical_constraint(name, source) != canonical_constraint(
+        name, (source[0], False, same[2]),
+    )
+
+
+def test_cast_normalization_is_strictly_limited_to_known_constraints() -> None:
+    source = (
+        "c", True,
+        "CHECK (status::text = ANY (ARRAY['pending'::character varying]::text[]))",
+    )
+    restored = (
+        "c", True,
+        "CHECK (status::text = ANY (ARRAY['pending'::character varying::text]))",
+    )
+    unknown = "custom_table.custom_check"
+    assert canonical_constraint(unknown, source) == source
+    assert canonical_constraint(unknown, restored) == restored
+    assert canonical_constraint(unknown, source) != canonical_constraint(unknown, restored)
