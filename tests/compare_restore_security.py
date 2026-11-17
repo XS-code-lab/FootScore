@@ -24,7 +24,7 @@ SECURITY_QUERY = """
     LEFT JOIN LATERAL aclexplode(
         COALESCE(
             c.relacl,
-            acldefault(CASE WHEN c.relkind = 'S' THEN 'S' ELSE 'r' END,
+            acldefault((CASE WHEN c.relkind = 'S' THEN 'S' ELSE 'r' END)::"char",
                        c.relowner)
         )
     ) AS a ON TRUE
@@ -144,9 +144,14 @@ def main() -> None:
         parser.error("Only isolated disposable PostgreSQL CI target is permitted")
     try:
         result = summarize(snapshot(source), snapshot(args.target))
-    except Exception:
-        # No SQL exception text: it may contain role names/connection details.
-        parser.exit(1, "Could not verify restored security metadata\n")
+    except Exception as exc:
+        # SQLSTATE and exception type are safe; never include SQL text,
+        # role grants, credentials or connection URI in failure output.
+        code = getattr(exc, "sqlstate", None)
+        parser.exit(
+            1, f"Could not verify restored security metadata "
+            f"({type(exc).__name__}, SQLSTATE={code or 'none'})\\n",
+        )
     print(json.dumps(result, indent=2))
     if not result["security_metadata_matches"]:
         raise SystemExit(1)
