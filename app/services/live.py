@@ -82,6 +82,7 @@ def upsert_match_events(db: Session, match: Match, events: list[dict]) -> int:
             )
             db.add(row)
         row.player_id = _ensure_player(db, item.get("player"))
+        _ensure_player(db, item.get("assist"))
         raw_time = item.get("time") or {}
         row.minute = raw_time.get("elapsed")
         row.kind = event_kind(item)
