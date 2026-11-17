@@ -121,9 +121,27 @@ def main() -> None:
         parser.error("Invalid isolated restore database name")
 
     try:
-        result = summarize_catalogs(
-            catalog_snapshot(source), catalog_snapshot(args.target),
-        )
+        source_catalog = catalog_snapshot(source)
+        restored_catalog = catalog_snapshot(args.target)
+        result = summarize_catalogs(source_catalog, restored_catalog)
+        if not result["catalogs_match"] and os.environ.get("FOOTSCORE_DEBUG_CONSTRAINTS") == "1":
+            # Temporary diagnostic for four publicly versioned DDL checks
+            # only. No row data, tokens, credentials or unlisted SQL output.
+            import sys
+            checks = {
+                "auth_one_time_tokens.auth_one_time_tokens_purpose_check",
+                "backup_alert_states.backup_alert_states_condition_check",
+                "email_deliveries.email_deliveries_status_check",
+                "historical_player_fetches.historical_player_fetches_status_check",
+            }
+            for name in result["mismatched_objects"]["constraints"]:
+                if name in checks:
+                    print(
+                        "CI DDL CHECK", name,
+                        "source:", source_catalog["constraints"].get(name),
+                        "restored:", restored_catalog["constraints"].get(name),
+                        file=sys.stderr,
+                    )
     except (psycopg.Error, ValueError, RuntimeError) as exc:
         # Only exception *class* and PostgreSQL SQLSTATE are emitted: no
         # SQL queries, table contents, connection URLs or private values.
