@@ -62,6 +62,10 @@ a 7-second delay is used between calls as a **local courtesy limit**;
 other callers sharing the same key still need coordinated per-minute
 limiting. Run only one backfill process and leave the daily reserve intact.
 
+The planner checks both locally recorded daily and rolling-60-second
+remaining request allowances, but these estimates are not authoritative
+for other applications sharing the key. See [provider readiness](PILOT_PROVIDER_READINESS.md).
+
 A successful nonempty response is recorded as `imported`, and a
 successful empty or unrecognized response as `empty`. Neither is
 certified complete. Empty responses are not retried automatically:
