@@ -14,6 +14,8 @@ Backend-only live football, U22 scouting and AI-analysis platform (work in progr
 - New position+competition peer-relative U22 discovery with coverage and uncertainty flags.
 - Offline, audited-label ML experiment with chronological holdout and JSON coefficients.
 - Safe historical fixture/player backfill planning, observed-response receipts and local coverage audits.
+- Transactional rolling-60-second provider request budgets shared across backend workers.
+- League-season capability metadata probes, explicitly not season-completeness proof.
 - Next-season outcome observation proposals that explicitly refuse automatic ML labels.
 - Read endpoints for match event timelines and team match statistics.
 - User registration/login, authenticated favorites, notification preferences and inbox.
@@ -54,7 +56,10 @@ python -m app.cli --league 39 --season 2026
 
 The free API budget defaults to 100 requests/day with a reserve of 10.
 Requests are charged locally **before** calling the provider and are never
-refunded on ambiguous failures. Do not run several schedulers for the same
+refunded on ambiguous failures. All in-app provider callers share the
+same database-backed daily and rolling 60-second guardrails (default 8/min,
+10/day reserved). Calls made outside FootScore using the same provider key
+are not counted. Do not run several schedulers for the same
 league. The pilot interval defaults to six hours; actual quota use depends
 on the number of leagues and additional API clients sharing the key.
 To fetch events and team statistics for one *existing* FootScore match (costs
