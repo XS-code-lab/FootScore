@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import Match, Player, PlayerMatchStats, Team
+from app.services.live_updates import record_update
 from app.services.notifications import notify_final_ratings
 
 
@@ -79,9 +80,13 @@ def upsert_fixture_players(db: Session, match: Match, response: list[dict]) -> i
                 PlayerMatchStats.match_id == match.id,
                 PlayerMatchStats.player_id == player.id,
             ))
-            if row is None:
+            is_new = row is None
+            if is_new:
                 row = PlayerMatchStats(match_id=match.id, player_id=player.id)
                 db.add(row)
+            previous = (
+                row.minutes, row.goals, row.assists, row.rating, row.team_id,
+            ) if not is_new else None
             detail = stats[0]
             games = detail.get("games") or {}
             goals = detail.get("goals") or {}
@@ -92,6 +97,13 @@ def upsert_fixture_players(db: Session, match: Match, response: list[dict]) -> i
             row.rating = parse_rating(games.get("rating"))
             row.payload = detail
             row.updated_at = datetime.now(timezone.utc)
+            current = (row.minutes, row.goals, row.assists, row.rating, row.team_id)
+            if is_new or previous != current:
+                record_update(db, match.id, "player_stat_changed", {
+                    "player_id": player.id, "team_id": team.id,
+                    "minutes": row.minutes, "goals": row.goals,
+                    "assists": row.assists, "rating": row.rating,
+                })
             if games.get("position"):
                 player.position = str(games["position"])[:50]
             updated += 1
