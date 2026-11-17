@@ -28,6 +28,7 @@ Backend-only live football, U22 scouting and AI-analysis platform (work in progr
 - PostgreSQL SKIP LOCKED outbox publishing across workers and database-backed auth attempt limits.
 - HMAC-hashed one-time email confirmation and password reset codes, JWT session invalidation and dry-run cleanup CLI.
 - Authenticated password changes and password-confirmed all-device JWT revocation, plus optional bounded retention worker.
+- Encrypted transactional security-email outbox with bounded SMTP retries and optional background worker.
 
 ## Requirements
 Python 3.11+ or Docker, an API-Football key for real requests. No API key is needed for offline tests.
@@ -160,8 +161,10 @@ See [production reliability design](docs/PRODUCTION_RELIABILITY.md).
 After applying Alembic revision `0009`, clients can use the new routes:
 `POST /api/v1/auth/verification/request`, `/auth/verification/confirm`,
 `/auth/password-reset/request` and `/auth/password-reset/confirm`.
-A 60-minute email confirmation or 15-minute reset code is sent only with
-server-side SMTPS configuration. Database stores only HMAC token hashes; a
+A 60-minute email confirmation or 15-minute reset code is **queued** only with
+server-side SMTPS configuration and `EMAIL_QUEUE_KEY`. The SMTP worker must
+be running for delivery to be attempted. Database stores the HMAC token hash
+and a temporary encrypted email code, not the plaintext token; a
 password reset invalidates previously issued access JWTs. SMTP is **not**
 configured or tested against a real provider by default; clients never see
 raw codes in API responses. Set `REQUIRE_VERIFIED_EMAIL=true` only after
@@ -188,6 +191,21 @@ It deletes expired rate buckets and one-time tokens in bounded batches
 once per day. For a no-change preview, run
 `python -m app.maintenance_worker`.
 See [session security and maintenance](docs/SESSION_SECURITY.md).
+
+### Encrypted security-email queue (v0.16)
+A confirmation/reset request now atomically persists a one-time token
+hash and its Fernet-encrypted delivery job. No SMTP request runs in the
+HTTP handler. To process a bounded pass: `python -m app.email_cli`.
+To opt in to a standalone email worker in Compose:
+`docker compose --profile email up -d email-worker`.
+
+Configure distinct private `JWT_SECRET` and `EMAIL_QUEUE_KEY`, plus
+`SMTP_HOST`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_SENDER`, and
+`SMTP_PORT=465`. Keep `REQUIRE_VERIFIED_EMAIL=false` until actual SMTP
+inbox delivery works. Five bounded retries are supported; codes are never
+sent once expired or revoked. SMTP acceptance does not prove inbox delivery,
+and worker crash after a send can cause duplicates. See
+[email outbox guide](docs/EMAIL_DELIVERY_OUTBOX.md).
 
 See [U22 design](docs/U22_SCOUTING_DESIGN.md) and
 [position/league cohort discovery v2](docs/U22_DISCOVERY_V2.md).
