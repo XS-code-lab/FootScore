@@ -17,20 +17,30 @@ def upsert_fixtures(db: Session, fixtures: list[Fixture]) -> int:
         ))
         if league is None:
             league = Competition(
-                name=f"League {incoming.league_id}", provider="api-football",
-                provider_id=incoming.league_id,
+                name=incoming.league_name or f"League {incoming.league_id}",
+                provider="api-football", provider_id=incoming.league_id,
             )
             db.add(league)
             db.flush()
+        else:
+            league.name = incoming.league_name or league.name
         team_ids = []
-        for pid in (incoming.home_team_id, incoming.away_team_id):
+        for pid, name in (
+            (incoming.home_team_id, incoming.home_team_name),
+            (incoming.away_team_id, incoming.away_team_name),
+        ):
             team = db.scalar(select(Team).where(
                 Team.provider == "api-football", Team.provider_id == pid,
             ))
             if team is None:
-                team = Team(name=f"Team {pid}", provider="api-football", provider_id=pid)
+                team = Team(
+                    name=name or f"Team {pid}",
+                    provider="api-football", provider_id=pid,
+                )
                 db.add(team)
                 db.flush()
+            else:
+                team.name = name or team.name
             team_ids.append(team.id)
         match = db.scalar(select(Match).where(
             Match.provider == "api-football", Match.provider_id == incoming.source_id,
