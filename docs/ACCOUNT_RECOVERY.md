@@ -57,12 +57,15 @@ with existing development accounts. With it enabled, unverified users
 cannot sign in or continue using a prior JWT. Existing accounts retain
 an unverified status after migration and need a confirmation email.
 
-Mail is sent via Python `smtplib.SMTP_SSL` with verified TLS.
-A synchronous send is *best-effort after DB commit*: SMTP failure leaves a
-valid but undelivered code and the public response is still generic.
-A later resend generates a new code. Configure provider retries, delivery
-monitoring, DKIM/SPF/DMARC, sender reputation and mail-queue durability
-before public launch. SMTP is not attempted at all when unconfigured.
+Mail now uses an **encrypted transactional delivery outbox** (v0.16):
+the API commits an HMAC token hash and Fernet-encrypted code in one transaction;
+a separate SMTP_SSL worker handles bounded delivery attempts and retries.
+Set a distinct `EMAIL_QUEUE_KEY`, configure SMTPS and opt in to the
+`email-worker` Compose profile. Codes remain encrypted at rest, and expired
+or invalidated codes are skipped. SMTP acceptance is *not* a guarantee of
+inbox delivery; a crash after SMTP acceptance can cause duplicates.
+See [email delivery outbox](EMAIL_DELIVERY_OUTBOX.md) for setup, security,
+retry policy and key rotation precautions.
 
 ## Token security and sessions
 
@@ -77,7 +80,8 @@ before public launch. SMTP is not attempted at all when unconfigured.
   revokes prior JWTs at subsequent API requests (no token blacklist).
   New JWTs include `ver`; the default of 0 keeps older developer JWTs
   working until the first password reset.
-- Codes are never returned in API responses or logged.
+- Codes are never returned in API responses or logged. While awaiting delivery,
+  a Fernet-encrypted copy exists in the email outbox, not plaintext.
 - Request endpoints have separate, HMAC-keyed 15-minute per-peer limits
   (3 verification and 3 reset requests), in addition to login (10) and
   registration (5). Do not trust arbitrary X-Forwarded-For headers.
