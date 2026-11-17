@@ -11,6 +11,7 @@ Backend-only live football, U22 scouting and AI-analysis platform (work in progr
 - Per-fixture goal/card/substitution/VAR event snapshots and team statistic ingestion.
 - Per-fixture player ratings/minutes/goals/assists and targeted player profile enrichment.
 - Read-only U22 established and emerging leaderboards with sample-size shrinkage.
+- New position+competition peer-relative U22 discovery with coverage and uncertainty flags.
 - Read endpoints for match event timelines and team match statistics.
 - User registration/login, authenticated favorites, notification preferences and inbox.
 - One-time goal, assist and final rating alerts with optional FCM push outbox.
@@ -70,6 +71,8 @@ Additional API endpoints:
 - `GET /api/v1/players/{player_id}`
 - `GET /api/v1/scouting/u22?category=established`
 - `GET /api/v1/scouting/u22?category=emerging`
+- `GET /api/v1/scouting/u22/discovery?category=emerging`
+- `GET /api/v1/scouting/u22/reports/{player_id}`
 
 This U22 leaderboard is a transparent sample-adjusted baseline, **not an AI
 potential prediction**, and is not adjusted for league strength or position.
@@ -96,9 +99,14 @@ stream does not poll API-Football for free. See
 
 This remains a development baseline: provider event IDs and VAR corrections
 need more validation, and Redis publisher coordination, backpressure, API
-rate limiting, stronger auth/account lifecycle and AI scouting remain pending.
+rate limiting, stronger auth/account lifecycle and trained AI scouting remain pending.
 Real device push and end-to-end production deployment are unverified.
 
-See [U22 design](docs/U22_SCOUTING_DESIGN.md).
+See [U22 design](docs/U22_SCOUTING_DESIGN.md) and
+[position/league cohort discovery v2](docs/U22_DISCOVERY_V2.md).
+New scouting discovery reads existing match data without consuming new provider
+quota. Scores are **not probabilities or predictions**; only within-competition,
+within-position comparisons are supported when at least five peers are present.
+No league-strength normalization or learned AI model exists yet.
 
 See [roadmap](docs/BACKEND_ROADMAP.md) and [provider strategy](docs/FREE_API_STRATEGY.md).
