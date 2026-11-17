@@ -95,8 +95,12 @@ def reset_password(db: Session, token: str, new_password: str) -> None:
     if not 12 <= len(new_password) <= 128:
         raise HTTPException(status_code=422, detail="Invalid password length")
     user = _consume(db, token, "reset_password")
-    user.password_hash = hash_password(new_password)
-    user.session_version += 1  # Invalidate all previously issued JWTs.
+    # Database-side increment avoids lost session revocations when a
+    # concurrent authenticated change/logout updates this same account.
+    db.execute(update(User).where(User.id == user.id).values(
+        password_hash=hash_password(new_password),
+        session_version=User.session_version + 1,
+    ))
     db.execute(
         update(AuthOneTimeToken)
         .where(
