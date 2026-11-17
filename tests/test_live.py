@@ -64,11 +64,12 @@ def test_idempotent_live_data_and_read_api() -> None:
         for _ in range(2):
             assert upsert_match_events(db, match, EVENTS) == 3
             assert upsert_match_statistics(db, match, STATS) == 3
-        # Identical-looking yellow cards are separate if both appear in one snapshot.
+        # A card detail correction updates its existing identity. An identical
+        # second card in the same snapshot is stored separately.
         repeat = dict(EVENTS[1], detail="Yellow Card")
         assert upsert_match_events(db, match, [repeat, repeat]) == 2
         db.commit()
-        assert db.scalar(select(func.count()).select_from(MatchEvent)) == 5
+        assert db.scalar(select(func.count()).select_from(MatchEvent)) == 4
         assert db.scalar(select(func.count()).select_from(TeamMatchStat)) == 3
         assert db.scalar(select(func.count()).select_from(Player)) == 4
         match_id = match.id
@@ -82,7 +83,7 @@ def test_idempotent_live_data_and_read_api() -> None:
         client = TestClient(app)
         events = client.get(f"/api/v1/matches/{match_id}/events").json()
         assert [e["kind"] for e in events] == [
-            "goal", "red_card", "yellow_card", "yellow_card", "substitution",
+            "goal", "yellow_card", "yellow_card", "substitution",
         ]
         assert events[0]["player_id"] is not None
         stats = client.get(f"/api/v1/matches/{match_id}/statistics").json()
