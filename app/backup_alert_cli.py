@@ -14,6 +14,7 @@ import os
 import time
 
 from app.backup_inventory import inspect_remote_backups
+from app.backup_remote import validate_destination
 from app.db import SessionLocal
 from app.services.backup_alerts import deliver_backup_alert, validate_webhook_url
 
@@ -73,6 +74,10 @@ def main() -> None:
         parser.error("Interval must be 5..1440 minutes")
     if not 1 <= args.max_age_hours <= 744 or not 1 <= args.remind_hours <= 168:
         parser.error("Invalid alert thresholds")
+    try:
+        validate_destination(args.bucket, args.prefix)
+    except ValueError as exc:
+        parser.error(str(exc))
     if args.execute:
         try:
             validate_webhook_url(os.environ.get("BACKUP_ALERT_WEBHOOK_URL", ""))
