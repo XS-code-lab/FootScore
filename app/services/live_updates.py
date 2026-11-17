@@ -1,4 +1,5 @@
 """Durable match update stream; Redis publishes after database commit."""
+import json
 from datetime import datetime, timezone
 
 from sqlalchemy import func, select
@@ -62,11 +63,23 @@ def match_snapshot(db: Session, match_id: int) -> dict | None:
 
 
 def drain_outbox(db: Session, redis_client, *, limit: int = 100) -> int:
-    """At-least-once publish. A single publisher must run; replay via REST API."""
-    rows = db.scalars(
-        select(LiveUpdate).where(LiveUpdate.published_at.is_(None))
-        .order_by(LiveUpdate.id).limit(limit)
-    ).all()
+    """Publish under PostgreSQL row locks; use REST replay for missed messages.
+
+    Multiple PostgreSQL workers skip rows already reserved by another worker.
+    Redis publish and DB commit are not atomic: a process crash after publish
+    can duplicate a message. Clients must deduplicate by update id.
+    """
+    if not 1 <= limit <= 1000:
+        raise ValueError("Outbox batch size must be between 1 and 1000")
+    query = (
+        select(LiveUpdate)
+        .where(LiveUpdate.published_at.is_(None))
+        .order_by(LiveUpdate.id)
+        .limit(limit)
+    )
+    if db.bind.dialect.name == "postgresql":
+        query = query.with_for_update(skip_locked=True)
+    rows = db.scalars(query).all()
     published = 0
     for update in rows:
         message = {
@@ -75,8 +88,6 @@ def drain_outbox(db: Session, redis_client, *, limit: int = 100) -> int:
             "kind": update.kind,
             "data": update.payload,
         }
-        import json
-
         redis_client.publish(
             f"footscore:match:{update.match_id}",
             json.dumps(message, separators=(",", ":"), default=str),
