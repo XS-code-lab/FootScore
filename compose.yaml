@@ -1,0 +1,113 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: footscore
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: footscore
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U footscore -d footscore"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+  api:
+    build: .
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+psycopg://footscore:${POSTGRES_PASSWORD}@db:5432/footscore
+      JWT_SECRET: ${JWT_SECRET:-}
+      ACCESS_TOKEN_MINUTES: ${ACCESS_TOKEN_MINUTES:-60}
+      REQUIRE_VERIFIED_EMAIL: ${REQUIRE_VERIFIED_EMAIL:-false}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-465}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_SENDER: ${SMTP_SENDER:-}
+      EMAIL_QUEUE_KEY: ${EMAIL_QUEUE_KEY:-}
+      API_FOOTBALL_KEY: ${API_FOOTBALL_KEY:-}
+      API_FOOTBALL_BASE_URL: ${API_FOOTBALL_BASE_URL:-https://v3.football.api-sports.io}
+      PROVIDER_DAILY_LIMIT: ${PROVIDER_DAILY_LIMIT:-100}
+      PROVIDER_RESERVE: ${PROVIDER_RESERVE:-10}
+      PROVIDER_PER_MINUTE_LIMIT: ${PROVIDER_PER_MINUTE_LIMIT:-8}
+      REDIS_URL: ${REDIS_URL:-}
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+  scheduler:
+    build: .
+    profiles: ["sync"]
+    restart: unless-stopped
+    command: ["python", "-m", "app.scheduler"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://footscore:${POSTGRES_PASSWORD}@db:5432/footscore
+      API_FOOTBALL_KEY: ${API_FOOTBALL_KEY:-}
+      SYNC_LEAGUES: ${SYNC_LEAGUES:-}
+      SYNC_INTERVAL_MINUTES: ${SYNC_INTERVAL_MINUTES:-360}
+      PROVIDER_DAILY_LIMIT: ${PROVIDER_DAILY_LIMIT:-100}
+      PROVIDER_RESERVE: ${PROVIDER_RESERVE:-10}
+      PROVIDER_PER_MINUTE_LIMIT: ${PROVIDER_PER_MINUTE_LIMIT:-8}
+    depends_on:
+      db:
+        condition: service_healthy
+  email-worker:
+    build: .
+    profiles: ["email"]
+    restart: unless-stopped
+    command: ["python", "-m", "app.email_cli",
+              "--watch", "--interval-seconds", "30", "--limit", "10"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://footscore:${POSTGRES_PASSWORD}@db:5432/footscore
+      JWT_SECRET: ${JWT_SECRET:-}
+      EMAIL_QUEUE_KEY: ${EMAIL_QUEUE_KEY:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-465}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_SENDER: ${SMTP_SENDER:-}
+    depends_on:
+      db:
+        condition: service_healthy
+  security-maintenance:
+    build: .
+    profiles: ["maintenance"]
+    restart: unless-stopped
+    command: ["python", "-m", "app.maintenance_worker",
+              "--execute", "--watch", "--interval-seconds", "86400"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://footscore:${POSTGRES_PASSWORD}@db:5432/footscore
+    depends_on:
+      db:
+        condition: service_healthy
+  redis:
+    image: redis:7-alpine
+    profiles: ["live"]
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - redisdata:/data
+  live-publisher:
+    build: .
+    profiles: ["live"]
+    restart: unless-stopped
+    command: ["python", "-m", "app.outbox_cli", "--watch"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://footscore:${POSTGRES_PASSWORD}@db:5432/footscore
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+volumes:
+  pgdata:
+  redisdata:

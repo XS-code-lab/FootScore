@@ -1,0 +1,23 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+*.pyc
+.env
+.env.*
+!.env.example
+
+# Audited research data and experimental models must not be committed.
+data/ml/
+models/
+*.joblib
+*.pkl
+
+# Never commit database backups or restore artifacts: they contain user data.
+*.dump
+*.backup
+*.pgdump
+backups/
+
+# Authenticated encrypted archives are still sensitive; never commit them.
+*.fsbak

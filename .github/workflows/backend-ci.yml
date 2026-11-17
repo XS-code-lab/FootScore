@@ -1,0 +1,175 @@
+name: Backend CI
+on:
+  push:
+    branches: [main, feature/backend-foundation]
+  pull_request:
+    branches: [main]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -e '.[dev,ml,backup]'
+      - run: ruff check .
+      - name: Validate Docker Compose
+        run: docker compose config --quiet
+        env:
+          POSTGRES_PASSWORD: ci-only-compose-password
+      - name: Pilot offline end-to-end smoke
+        run: pytest -q tests/test_pilot_e2e.py
+      - name: Complete test suite
+        run: pytest -q
+
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: footscore
+          POSTGRES_PASSWORD: ci-only-not-production
+          POSTGRES_DB: footscore
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U footscore -d footscore"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql+psycopg://footscore:ci-only-not-production@127.0.0.1:5432/footscore
+      REDIS_URL: redis://127.0.0.1:6379/0
+      FOOTSCORE_INTEGRATION_TESTS: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -e '.[dev,ml,backup]'
+      - name: Apply all PostgreSQL migrations
+        run: alembic upgrade head
+      - name: Real PostgreSQL and Redis integration smoke
+        run: pytest -q tests/test_postgres_redis_integration.py
+      - name: Verify reversible migrations on disposable CI database
+        run: |
+          alembic downgrade base
+          alembic upgrade head
+          pytest -q tests/test_postgres_redis_integration.py
+      - name: Seed synthetic PostgreSQL recovery fixture
+        run: python tests/backup_drill_check.py seed
+      - name: Backup and restore into a NEW isolated CI database
+        env:
+          PGHOST: 127.0.0.1
+          PGPORT: '5432'
+          PGUSER: footscore
+          PGDATABASE: footscore
+          PGPASSWORD: ci-only-not-production
+          # Test-only hex key; NEVER reuse in any real deployment.
+          FOOTSCORE_BACKUP_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/footscore-ci-backup"
+          chmod 700 "$RUNNER_TEMP/footscore-ci-backup"
+          # Create mode-0600 archives owned by the runner, not Docker root.
+          docker run --rm --network host --user "$(id -u):$(id -g)" \
+            -e PGHOST -e PGPORT -e PGUSER -e PGDATABASE -e PGPASSWORD \
+            -v "$PWD/scripts:/scripts:ro" \
+            -v "$RUNNER_TEMP/footscore-ci-backup:/backups" \
+            postgres:16-alpine sh /scripts/postgres_backup.sh /backups/ci.dump
+          python -m app.backup_crypto encrypt \
+            --input "$RUNNER_TEMP/footscore-ci-backup/ci.dump" \
+            --output "$RUNNER_TEMP/footscore-ci-backup/ci.dump.fsbak"
+          python -m app.backup_crypto verify \
+            --input "$RUNNER_TEMP/footscore-ci-backup/ci.dump.fsbak"
+          cp "$RUNNER_TEMP/footscore-ci-backup/ci.dump.fsbak" \
+            "$RUNNER_TEMP/footscore-ci-backup/tampered.fsbak"
+          printf 'tampered' >> "$RUNNER_TEMP/footscore-ci-backup/tampered.fsbak"
+          if python -m app.backup_crypto verify \
+            --input "$RUNNER_TEMP/footscore-ci-backup/tampered.fsbak"; then
+            echo 'Tampered backup unexpectedly verified' >&2
+            exit 1
+          fi
+          rm -f "$RUNNER_TEMP/footscore-ci-backup/tampered.fsbak"
+          # The S3 adapter is exercised without external credentials or network.
+          python tests/backup_remote_drill.py \
+            --encrypted "$RUNNER_TEMP/footscore-ci-backup/ci.dump.fsbak" \
+            --downloaded "$RUNNER_TEMP/footscore-ci-backup/remote-download.fsbak"
+          rm -f "$RUNNER_TEMP/footscore-ci-backup/ci.dump"
+          python -m app.backup_crypto decrypt \
+            --input "$RUNNER_TEMP/footscore-ci-backup/remote-download.fsbak" \
+            --output "$RUNNER_TEMP/footscore-ci-backup/restore-input.dump"
+          docker run --rm --network host \
+            -e PGHOST -e PGPORT -e PGUSER -e PGDATABASE -e PGPASSWORD \
+            -v "$PWD/scripts:/scripts:ro" \
+            -v "$RUNNER_TEMP/footscore-ci-backup:/backups:ro" \
+            postgres:16-alpine sh /scripts/postgres_restore_drill.sh \
+              /backups/restore-input.dump footscore_restore_ci
+          DATABASE_URL=postgresql+psycopg://footscore:ci-only-not-production@127.0.0.1:5432/footscore_restore_ci \
+            python tests/backup_drill_check.py verify
+          # Independently audit schema, critical tables and orphaned
+          # outbox links using ONLY the isolated restored database.
+          python -m app.restore_audit verify --target footscore_restore_ci \
+            > "$RUNNER_TEMP/footscore-restore-audit.json"
+          python -c 'import json,os; from pathlib import Path; r=json.loads((Path(os.environ["RUNNER_TEMP"])/"footscore-restore-audit.json").read_text()); assert r["schema_matches_current_head"] and r["foreign_key_constraints_validated"] and r["orphan_outbox_rows"] == 0 and r["critical_table_count"] == 6 and r["audit_elapsed_seconds"] >= 0; print("Independent restored schema/foreign-key/time audit passed")'
+          # All user-like records here are deliberately synthetic. Compare
+          # EVERY public table by complete row content, not merely counts.
+          # The fixture database has no writers during this snapshot test.
+          python tests/compare_restore_content.py --target footscore_restore_ci \
+            > "$RUNNER_TEMP/footscore-content-compare.json"
+          python -c 'import json,os; from pathlib import Path; r=json.loads((Path(os.environ["RUNNER_TEMP"])/"footscore-content-compare.json").read_text()); assert r["all_tables_match"] and not r["mismatched_tables"] and r["compared_tables"] >= 15 and r["compared_source_rows"] >= 1500 and r["compared_source_rows"] == r["compared_restored_rows"] and not r["raw_rows_or_hashes_exported"]; print("Independent full-row content comparison passed for all application tables")'
+          # Catalog comparison runs before any post-restore writes, on
+          # the quiescent synthetic source and untouched restored target.
+          # Emit only safe catalog names and aggregate counts on mismatch.
+          # Preserve the verifier's nonzero status through tee.
+          python tests/compare_restore_catalog.py --target footscore_restore_ci \
+            | tee "$RUNNER_TEMP/footscore-catalog-compare.json"
+          python -c 'import json,os; from pathlib import Path; r=json.loads((Path(os.environ["RUNNER_TEMP"])/"footscore-catalog-compare.json").read_text()); assert r["catalogs_match"] and r["index_count"] >= 10 and r["constraint_count"] >= 10 and r["sequence_count"] >= 5 and all(not v for v in r["mismatched_objects"].values()) and not r["sequence_values_exported"]; print("Restored indexes, constraints and sequence state match source")'
+          # Check database-local ownership, effective object grants, RLS,
+          # public schema ACL and available extension versions.
+          python tests/compare_restore_security.py --target footscore_restore_ci \
+            | tee "$RUNNER_TEMP/footscore-security-compare.json"
+          python -c 'import json,os; from pathlib import Path; r=json.loads((Path(os.environ["RUNNER_TEMP"])/"footscore-security-compare.json").read_text()); assert r["security_metadata_matches"] and r["objects_checked"] >= 15 and r["extensions_checked"] >= 1 and r["schemas_checked"] == 1 and not r["acl_details_exported"] and not r["production_least_privilege_verified"]; print("Restored object owners, ACLs, schema and extensions match synthetic source")'
+          # FastAPI must point strictly to the disposable restored DB.
+          # The write checks prove that restored ID sequences can advance.
+          DATABASE_URL=postgresql+psycopg://footscore:ci-only-not-production@127.0.0.1:5432/footscore_restore_ci \
+            python tests/restored_api_smoke.py
+          # Only isolated restored DB privileges are changed, after all
+          # source-vs-restore comparisons. No role in production is touched.
+          DATABASE_URL=postgresql+psycopg://footscore:ci-only-not-production@127.0.0.1:5432/footscore_restore_ci \
+            python tests/restored_readonly_role_smoke.py
+          # Test a distinct password-authenticated LOGIN as app runtime
+          # against the restored DB. Grant DML, never schema ownership;
+          # verify future migration-owned tables are accessible.
+          DATABASE_URL=postgresql+psycopg://footscore:ci-only-not-production@127.0.0.1:5432/footscore_restore_ci \
+            python tests/restored_runtime_role_smoke.py
+          # Confirm source fixtures are intact after RESTORED-only writes.
+          python tests/backup_drill_check.py verify
+          # Guard: the helper must refuse to overwrite an existing restore DB.
+          if docker run --rm --network host \
+            -e PGHOST -e PGPORT -e PGUSER -e PGDATABASE -e PGPASSWORD \
+            -v "$PWD/scripts:/scripts:ro" \
+            -v "$RUNNER_TEMP/footscore-ci-backup:/backups:ro" \
+            postgres:16-alpine sh /scripts/postgres_restore_drill.sh \
+              /backups/restore-input.dump footscore_restore_ci; then
+            echo 'Unsafe restore was not rejected' >&2
+            exit 1
+          fi
+          docker run --rm --network host \
+            -e PGHOST -e PGPORT -e PGUSER -e PGPASSWORD \
+            postgres:16-alpine dropdb --maintenance-db=postgres footscore_restore_ci
+          rm -f "$RUNNER_TEMP/footscore-ci-backup/restore-input.dump"
+          rm -f "$RUNNER_TEMP/footscore-ci-backup/ci.dump.fsbak"
+          rm -f "$RUNNER_TEMP/footscore-ci-backup/remote-download.fsbak"
