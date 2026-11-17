@@ -36,10 +36,10 @@ KNOWN_TEXT_ENUM_CHECKS = frozenset({
     "historical_player_fetches.historical_player_fetches_status_check",
 })
 _TEXT_ENUM_PATTERN = re.compile(
-    r"CHECK \\((?P<field>[a-z_]+)::text = ANY \\(ARRAY\\["
+    r"CHECK \((?P<field>[a-z_]+)::text = ANY \(ARRAY\["
     r"(?P<items>'[a-z_]+'::character varying(?:::text)?"
     r"(?:, '[a-z_]+'::character varying(?:::text)?)*)"
-    r"\\](?:::text\\[\\])?\\)\\)"
+    r"\](?:::text\[\])?\)\)"
 )
 _TEXT_ENUM_ITEM = re.compile(r"'([a-z_]+)'::character varying(?:::text)?")
 
