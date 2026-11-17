@@ -33,11 +33,14 @@ def reserve_provider_call(
     SQLite serializes the write transaction; SQLite isn't a production
     multi-process deployment database. Commit before the HTTP request.
     """
-    if at is None:
-        at = datetime.now(timezone.utc)
-    if at.tzinfo is None or at.utcoffset() is None:
-        raise ValueError("Reservation timestamp must be timezone-aware")
-    at = at.astimezone(timezone.utc)
+    # Explicit timestamps exist only for deterministic tests. In normal
+    # operation the clock MUST be sampled after acquiring the provider lock.
+    # Sampling before locking lets waiting transactions count only earlier
+    # reservations, and can overrun the 60-second budget under concurrency.
+    if at is not None:
+        if at.tzinfo is None or at.utcoffset() is None:
+            raise ValueError("Reservation timestamp must be timezone-aware")
+        at = at.astimezone(timezone.utc)
     per_minute = (settings.provider_per_minute_limit
                   if minute_limit is None else minute_limit)
     if per_minute < 1 or per_minute > 10:
@@ -62,6 +65,16 @@ def reserve_provider_call(
             ProviderRateLock.provider == provider
         ).with_for_update()
     ).scalar_one()
+
+    if at is None:
+        # PostgreSQL's clock_timestamp() is evaluated NOW rather than at
+        # transaction start (unlike now()/CURRENT_TIMESTAMP), and provides
+        # one clock for all FootScore workers sharing this database.
+        at = (
+            db.scalar(select(func.clock_timestamp()))
+            if dialect == "postgresql" else datetime.now(timezone.utc)
+        )
+        at = at.astimezone(timezone.utc)
 
     active = db.scalar(
         select(func.count()).select_from(ProviderRequestLog).where(
