@@ -3,13 +3,13 @@
 No external service, credentials, or real API-Football requests are used.
 """
 from copy import deepcopy
-from datetime import date, datetime, timezone
+from datetime import date
 
 import httpx
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, func, select
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.db import Base, get_db
