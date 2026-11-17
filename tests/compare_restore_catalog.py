@@ -6,9 +6,11 @@ against a live changing production database or print schema SQL.
 """
 import json
 import os
+import re
 
 import psycopg
 from psycopg import sql
+
 
 def _connection(dbname: str):
     """Open one bounded, CI-only PostgreSQL connection."""
@@ -21,6 +23,40 @@ def _connection(dbname: str):
     if os.environ.get("PGPORT"):
         params["port"] = os.environ["PGPORT"]
     return psycopg.connect(**params)
+
+# PostgreSQL 16 pg_dump may move ::text from a VARCHAR enum array
+# onto each array literal when restoring the CHECK expression. These
+# FOUR public, versioned constraints use strictly enumerated text labels.
+# Do not normalize arbitrary SQL: new field names, operators, labels,
+# missing constraints or changed validity must remain visible.
+KNOWN_TEXT_ENUM_CHECKS = frozenset({
+    "auth_one_time_tokens.auth_one_time_tokens_purpose_check",
+    "backup_alert_states.backup_alert_states_condition_check",
+    "email_deliveries.email_deliveries_status_check",
+    "historical_player_fetches.historical_player_fetches_status_check",
+})
+_TEXT_ENUM_PATTERN = re.compile(
+    r"CHECK \\((?P<field>[a-z_]+)::text = ANY \\(ARRAY\\["
+    r"(?P<items>'[a-z_]+'::character varying(?:::text)?"
+    r"(?:, '[a-z_]+'::character varying(?:::text)?)*)"
+    r"\\](?:::text\\[\\])?\\)\\)"
+)
+_TEXT_ENUM_ITEM = re.compile(r"'([a-z_]+)'::character varying(?:::text)?")
+
+
+def canonical_constraint(name: str, value):
+    """Normalize only the documented, semantics-preserving PG16 cast rewrite."""
+    if name not in KNOWN_TEXT_ENUM_CHECKS or value is None:
+        return value
+    kind, validated, definition = value
+    if kind != "c":
+        return value
+    match = _TEXT_ENUM_PATTERN.fullmatch(definition)
+    if match is None:
+        return value
+    labels = tuple(_TEXT_ENUM_ITEM.findall(match.group("items")))
+    return kind, validated, ("text_enum_any", match.group("field"), labels)
+
 
 INDEX_QUERY = """
     SELECT tablename, indexname, indexdef
@@ -85,9 +121,17 @@ def summarize_catalogs(source: dict, restored: dict) -> dict:
         before = source[kind]
         after = restored[kind]
         keys = sorted(set(before) | set(after))
-        mismatches[kind] = [
-            key for key in keys if before.get(key) != after.get(key)
-        ]
+        if kind == "constraints":
+            mismatches[kind] = [
+                key for key in keys if (
+                    canonical_constraint(key, before.get(key))
+                    != canonical_constraint(key, after.get(key))
+                )
+            ]
+        else:
+            mismatches[kind] = [
+                key for key in keys if before.get(key) != after.get(key)
+            ]
     return {
         "catalogs_match": all(not value for value in mismatches.values()),
         "index_count": len(source["indexes"]),
@@ -124,24 +168,6 @@ def main() -> None:
         source_catalog = catalog_snapshot(source)
         restored_catalog = catalog_snapshot(args.target)
         result = summarize_catalogs(source_catalog, restored_catalog)
-        if not result["catalogs_match"] and os.environ.get("FOOTSCORE_DEBUG_CONSTRAINTS") == "1":
-            # Temporary diagnostic for four publicly versioned DDL checks
-            # only. No row data, tokens, credentials or unlisted SQL output.
-            import sys
-            checks = {
-                "auth_one_time_tokens.auth_one_time_tokens_purpose_check",
-                "backup_alert_states.backup_alert_states_condition_check",
-                "email_deliveries.email_deliveries_status_check",
-                "historical_player_fetches.historical_player_fetches_status_check",
-            }
-            for name in result["mismatched_objects"]["constraints"]:
-                if name in checks:
-                    print(
-                        "CI DDL CHECK", name,
-                        "source:", source_catalog["constraints"].get(name),
-                        "restored:", restored_catalog["constraints"].get(name),
-                        file=sys.stderr,
-                    )
     except (psycopg.Error, ValueError, RuntimeError) as exc:
         # Only exception *class* and PostgreSQL SQLSTATE are emitted: no
         # SQL queries, table contents, connection URLs or private values.
