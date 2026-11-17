@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.models import Competition, Match, Team
 from app.providers.api_football import Fixture
+from app.services.live_updates import record_update
 from app.services.notifications import FINAL_STATUSES, notify_final_ratings
 
 
@@ -47,6 +48,9 @@ def upsert_fixtures(db: Session, fixtures: list[Fixture]) -> int:
             Match.provider == "api-football", Match.provider_id == incoming.source_id,
         ))
         previous_status = match.status if match is not None else None
+        previous = (
+            match.status, match.home_score, match.away_score, match.kickoff
+        ) if match is not None else None
         if match is None:
             match = Match(provider="api-football", provider_id=incoming.source_id)
             db.add(match)
@@ -59,6 +63,13 @@ def upsert_fixtures(db: Session, fixtures: list[Fixture]) -> int:
         match.observed_at = datetime.now(timezone.utc)
         match.updated_at = datetime.now(timezone.utc)
         db.flush()
+        current = (match.status, match.home_score, match.away_score, match.kickoff)
+        if previous != current:
+            record_update(db, match.id, "score_changed", {
+                "status": match.status,
+                "home_score": match.home_score,
+                "away_score": match.away_score,
+            })
         if previous_status not in FINAL_STATUSES and match.status in FINAL_STATUSES:
             notify_final_ratings(db, match)
         count += 1
