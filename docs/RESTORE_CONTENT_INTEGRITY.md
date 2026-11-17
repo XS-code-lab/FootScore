@@ -68,6 +68,11 @@ the dump and comparison. A live source comparison would therefore
 be misleading without an explicitly captured source snapshot, consistent
 manifest, or alternative WAL/snapshot-aware verification method.
 
+Backend v0.26 adds separate index, constraint and sequence state comparisons,
+plus FastAPI read/write smoke on only the isolated restored test database.
+These are performed after the full-row comparison; see
+[restored backend checks](RESTORED_BACKEND_CHECKS.md).
+
 This CI test also cannot establish a production recovery-point
 objective, recovery-time objective, 100% provider data coverage, backup
 key escrow, a cloud IAM policy, or whether a restored application
