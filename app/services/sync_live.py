@@ -5,7 +5,7 @@ from app.db import SessionLocal
 from app.models import Match
 from app.providers.api_football import ApiFootballClient
 from app.services.live import upsert_match_events, upsert_match_statistics
-from app.services.quota import reserve_request
+from app.services.provider_guardrails import reserve_provider_call
 from app.settings import settings
 
 
@@ -35,8 +35,7 @@ def sync_match_details(match_id: int, *, events: bool = True,
     try:
         if events:
             with SessionLocal.begin() as session:
-                reserve_request(session, limit=settings.provider_daily_limit,
-                                reserve=settings.provider_reserve)
+                reserve_provider_call(session)
             raw = client.fetch_events(fixture_id=fixture_id)
             with SessionLocal.begin() as session:
                 events_count = upsert_match_events(
