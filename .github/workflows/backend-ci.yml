@@ -12,7 +12,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: pip install -e '.[dev,ml]'
+      - run: pip install -e '.[dev,ml,backup]'
       - run: ruff check .
       - name: Validate Docker Compose
         run: docker compose config --quiet
@@ -58,7 +58,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: pip install -e '.[dev,ml]'
+      - run: pip install -e '.[dev,ml,backup]'
       - name: Apply all PostgreSQL migrations
         run: alembic upgrade head
       - name: Real PostgreSQL and Redis integration smoke
