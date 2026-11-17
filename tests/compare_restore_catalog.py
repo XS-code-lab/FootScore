@@ -35,7 +35,7 @@ CONSTRAINT_QUERY = """
     JOIN pg_class AS rel ON rel.oid = c.conrelid
     JOIN pg_namespace AS ns ON ns.oid = rel.relnamespace
     WHERE ns.nspname = 'public'
-    ORDER BY rel.relname, constraint.conname
+    ORDER BY rel.relname, c.conname
 """
 SEQUENCE_QUERY = """
     SELECT sequencename, start_value, min_value, max_value,
