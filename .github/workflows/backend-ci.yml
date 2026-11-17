@@ -14,4 +14,7 @@ jobs:
           python-version: '3.12'
       - run: pip install -e '.[dev,ml]'
       - run: ruff check .
-      - run: pytest -q
+      - name: Pilot offline end-to-end smoke
+        run: pytest -q tests/test_pilot_e2e.py
+      - name: Complete test suite
+        run: pytest -q
