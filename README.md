@@ -37,6 +37,7 @@ Backend-only live football, U22 scouting and AI-analysis platform (work in progr
 - Optional HTTPS backup visibility alerts with PostgreSQL deduplication and recovery notifications.
 - Explicit independent encrypted S3 archive recovery drill into a NEW disposable PostgreSQL database, with read-only schema and referential checks.
 - Per-phase recovery timing evidence, optional drill budget and validated foreign-key schema audit (not production RTO/RPO).
+- CI-only complete-row source/restore content comparison across all PostgreSQL application tables using streaming SHA-256 digests.
 
 ## Requirements
 Python 3.11+ or Docker, an API-Football key for real requests. No API key is needed for offline tests.
