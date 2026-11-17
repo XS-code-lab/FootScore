@@ -50,8 +50,9 @@ def store_encrypted_archive(
         raise ValueError("Unsafe backup object key")
     if path.is_symlink() or not path.is_file():
         raise ValueError("Encrypted archive must be a regular, non-symlink file")
-    if not path.open("rb").read(len(MAGIC)) == MAGIC:
-        raise ValueError("Refusing to upload an unencrypted PostgreSQL archive")
+    with path.open("rb") as encrypted:
+        if encrypted.read(len(MAGIC)) != MAGIC:
+            raise ValueError("Refusing to upload an unencrypted PostgreSQL archive")
 
     # Authentication uses private backup key and rejects truncated/tampered data.
     decrypt_archive(path, verify_only=True)
@@ -85,9 +86,12 @@ def fetch_and_verify_encrypted_archive(
     import os
     import tempfile
 
-    from app.backup_crypto import _destination
-
-    _destination(destination, destination)
+    if (
+        os.path.lexists(destination)
+        or not destination.parent.is_dir()
+        or destination.parent.is_symlink()
+    ):
+        raise ValueError("Refusing to overwrite or use an unsafe download destination")
     fd, temp_name = tempfile.mkstemp(
         prefix=".footscore-remote-", dir=str(destination.parent),
     )
