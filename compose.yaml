@@ -26,6 +26,7 @@ services:
       SMTP_USERNAME: ${SMTP_USERNAME:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_SENDER: ${SMTP_SENDER:-}
+      EMAIL_QUEUE_KEY: ${EMAIL_QUEUE_KEY:-}
       API_FOOTBALL_KEY: ${API_FOOTBALL_KEY:-}
       API_FOOTBALL_BASE_URL: ${API_FOOTBALL_BASE_URL:-https://v3.football.api-sports.io}
       PROVIDER_DAILY_LIMIT: ${PROVIDER_DAILY_LIMIT:-100}
@@ -50,6 +51,24 @@ services:
       PROVIDER_DAILY_LIMIT: ${PROVIDER_DAILY_LIMIT:-100}
       PROVIDER_RESERVE: ${PROVIDER_RESERVE:-10}
       PROVIDER_PER_MINUTE_LIMIT: ${PROVIDER_PER_MINUTE_LIMIT:-8}
+    depends_on:
+      db:
+        condition: service_healthy
+  email-worker:
+    build: .
+    profiles: ["email"]
+    restart: unless-stopped
+    command: ["python", "-m", "app.email_cli",
+              "--watch", "--interval-seconds", "30", "--limit", "10"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://footscore:${POSTGRES_PASSWORD}@db:5432/footscore
+      JWT_SECRET: ${JWT_SECRET:-}
+      EMAIL_QUEUE_KEY: ${EMAIL_QUEUE_KEY:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-465}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_SENDER: ${SMTP_SENDER:-}
     depends_on:
       db:
         condition: service_healthy
