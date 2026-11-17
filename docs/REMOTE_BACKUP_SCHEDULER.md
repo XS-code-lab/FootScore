@@ -81,7 +81,11 @@ length and digest metadata with the local encrypted file.
 
 - **Single-object limit: 5 GiB.** Larger database archives are rejected
   before upload; a safe multipart design is not part of this release.
-- This is a **create-only** feature; it does not list/delete remote
+- A separate v0.23 command provides an *explicitly opted-in* encrypted
+S3 download and isolated PostgreSQL restore audit. See
+`ISOLATED_RESTORE_AUDIT.md`. Uploads alone do not prove recoverability.
+
+This is a **create-only** feature; it does not list/delete remote
   objects or enforce retention.
 - The upload confirmation check is **not independent end-to-end
   verification**: both HTTP response and HEAD come from the same
