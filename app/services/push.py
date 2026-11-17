@@ -52,9 +52,11 @@ def dispatch_pending(
     # Run a single process. A lease-based concurrent dispatcher is future work.
     rows = db.scalars(
         select(PushDelivery)
+        .join(Notification, Notification.id == PushDelivery.notification_id)
         .where(
             PushDelivery.status == "pending",
             PushDelivery.attempts < max_attempts,
+            Notification.invalidated_at.is_(None),
         )
         .order_by(PushDelivery.id)
         .limit(limit)
