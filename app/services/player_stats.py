@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import Match, Player, PlayerMatchStats, Team
+from app.services.notifications import notify_final_ratings
 
 
 def parse_nonnegative_int(value: object) -> int | None:
@@ -95,6 +96,8 @@ def upsert_fixture_players(db: Session, match: Match, response: list[dict]) -> i
                 player.position = str(games["position"])[:50]
             updated += 1
     db.flush()
+    if updated:
+        notify_final_ratings(db, match)
     return updated
 
 
