@@ -10,7 +10,17 @@ import os
 import psycopg
 from psycopg import sql
 
-from tests.compare_restore_content import _connection
+def _connection(dbname: str):
+    """Open one bounded, CI-only PostgreSQL connection."""
+    params = {
+        "host": os.environ["PGHOST"],
+        "user": os.environ["PGUSER"],
+        "dbname": dbname,
+        "connect_timeout": 5,
+    }
+    if os.environ.get("PGPORT"):
+        params["port"] = os.environ["PGPORT"]
+    return psycopg.connect(**params)
 
 INDEX_QUERY = """
     SELECT tablename, indexname, indexdef
