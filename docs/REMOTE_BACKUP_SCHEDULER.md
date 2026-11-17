@@ -104,6 +104,10 @@ length and digest metadata with the local encrypted file.
 
 ## IAM, security and backup strategy
 
+v0.21 adds an *independent, read-only* S3 inventory CLI for freshness
+monitoring and retention **proposals**. It neither deletes remote objects
+nor proves recoverability; see [backup retention and freshness](BACKUP_RETENTION.md).
+
 The safest design uses workload identity with permission to PUT only
 to a dedicated private bucket/prefix plus HEAD for checking, not broad
 bucket deletion. Cloud infrastructure must also enforce private
