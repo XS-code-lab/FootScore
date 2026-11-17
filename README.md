@@ -26,6 +26,7 @@ Backend-only live football, U22 scouting and AI-analysis platform (work in progr
 - Explicit provider HTTP 429 handling without unlimited retries and database connectivity readiness.
 - Disposable PostgreSQL 16 / Redis 7 integration CI, concurrent quota locking and migration roundtrip.
 - PostgreSQL SKIP LOCKED outbox publishing across workers and database-backed auth attempt limits.
+- HMAC-hashed one-time email confirmation and password reset codes, JWT session invalidation and dry-run cleanup CLI.
 
 ## Requirements
 Python 3.11+ or Docker, an API-Football key for real requests. No API key is needed for offline tests.
@@ -153,6 +154,23 @@ Login and registration now use database-backed, 15-minute, per-peer abuse
 limits with no raw IP storage. Ensure `JWT_SECRET` is configured and apply
 Alembic revision 0008. Old rate bucket rows need periodic cleanup.
 See [production reliability design](docs/PRODUCTION_RELIABILITY.md).
+
+### Account verification & recovery (v0.14)
+After applying Alembic revision `0009`, clients can use the new routes:
+`POST /api/v1/auth/verification/request`, `/auth/verification/confirm`,
+`/auth/password-reset/request` and `/auth/password-reset/confirm`.
+A 60-minute email confirmation or 15-minute reset code is sent only with
+server-side SMTPS configuration. Database stores only HMAC token hashes; a
+password reset invalidates previously issued access JWTs. SMTP is **not**
+configured or tested against a real provider by default; clients never see
+raw codes in API responses. Set `REQUIRE_VERIFIED_EMAIL=true` only after
+reliable SMTP delivery is configured and existing accounts have a way to
+confirm their email. Without it, the verification feature is optional.
+
+To preview expired auth bucket/code cleanup without mutation:
+`python -m app.maintenance_cli`; add `--execute --limit 1000` to delete
+up to 1,000 expired rows. This needs a trusted periodic scheduler.
+See [account recovery design](docs/ACCOUNT_RECOVERY.md).
 
 See [U22 design](docs/U22_SCOUTING_DESIGN.md) and
 [position/league cohort discovery v2](docs/U22_DISCOVERY_V2.md).
