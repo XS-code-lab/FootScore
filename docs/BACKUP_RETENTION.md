@@ -74,7 +74,9 @@ The report's `freshness.state` is one of:
 **always false**. Object names and remote listings can be spoofed or
 stale. To prove recoverability, separately download the ciphertext,
 verify AES-256-GCM with the correct private key and restore into a fresh
-isolated PostgreSQL database (see `ENCRYPTED_BACKUPS.md`).
+isolated PostgreSQL database. v0.23 supplies an *opt-in* recovery CLI
+that checks the restored schema and outbox links (see
+`ISOLATED_RESTORE_AUDIT.md`).
 
 ## Retention proposals — NEVER automatic deletion
 
