@@ -113,7 +113,11 @@ def main() -> None:
             "target": target, "schema_matches_current_head": True,
             "note": "Full SQL checks execute separately against real pg_restore",
         },
+        max_drill_seconds=900,
     )
+    assert recovered["measurements"]["operator_drill_budget_met"] is True
+    assert recovered["measurements"]["production_rto_verified"] is False
+    assert len(recovered["measurements"]["phase_seconds"]) == 4
     assert recovered["cryptographic_integrity_verified"]
     assert recovered["audit"]["schema_matches_current_head"]
     assert s3.calls == ["put", "head", "get", "list", "get"]
