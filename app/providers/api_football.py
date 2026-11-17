@@ -1,6 +1,6 @@
-"""A quota-aware provider adapter. No credentials are required for tests."""
+"""API-Football adapter. No credentials are required for tests."""
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any
 
 import httpx
@@ -20,6 +20,9 @@ class Fixture:
     home_team_id: str
     away_team_id: str
     league_id: str
+    home_team_name: str = ""
+    away_team_name: str = ""
+    league_name: str = ""
 
 
 def normalize_fixture(item: dict[str, Any]) -> Fixture:
@@ -38,17 +41,27 @@ def normalize_fixture(item: dict[str, Any]) -> Fixture:
         home_team_id=str(teams["home"]["id"]),
         away_team_id=str(teams["away"]["id"]),
         league_id=str(league["id"]),
+        home_team_name=teams["home"].get("name") or "",
+        away_team_name=teams["away"].get("name") or "",
+        league_name=league.get("name") or "",
     )
 
 
 class ApiFootballClient:
-    def __init__(self, api_key: str, *, base_url: str = "https://v3.football.api-sports.io",
-                 transport: httpx.BaseTransport | None = None):
+    def __init__(
+        self,
+        api_key: str,
+        *,
+        base_url: str = "https://v3.football.api-sports.io",
+        transport: httpx.BaseTransport | None = None,
+    ):
         if not api_key:
             raise ValueError("API-Football key required")
         self.client = httpx.Client(
-            base_url=base_url, headers={"x-apisports-key": api_key},
-            timeout=15, transport=transport
+            base_url=base_url,
+            headers={"x-apisports-key": api_key},
+            timeout=15,
+            transport=transport,
         )
 
     def fetch_fixtures(self, *, league: int, season: int) -> list[Fixture]:
