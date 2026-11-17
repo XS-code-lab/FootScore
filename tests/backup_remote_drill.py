@@ -6,14 +6,21 @@ No cloud credentials, actual bucket, or provider network calls are involved.
 import argparse
 import io
 import os
+from datetime import datetime, timezone
 from pathlib import Path
+
+from app.backup_inventory import inspect_remote_backups
 
 from app.backup_remote import (
     fetch_and_verify_encrypted_archive, store_encrypted_archive,
 )
 
 BUCKET = "footscore-ci-mock-only"
-KEY = "footscore/ci/isolated-restore-test.fsbak"
+CI_CREATED_AT = datetime.now(timezone.utc)
+KEY = (
+    f"footscore/{CI_CREATED_AT:%Y/%m/%d}/"
+    f"{CI_CREATED_AT:%Y%m%dT%H%M%S%fZ}-{'a' * 32}.fsbak"
+)
 
 
 class FakeS3:
@@ -39,6 +46,20 @@ class FakeS3:
         data, metadata = self.items[(Bucket, Key)]
         return {"ContentLength": len(data), "Metadata": metadata}
 
+    def list_objects_v2(self, **params):
+        assert params["Bucket"] == BUCKET
+        assert params["Prefix"] == "footscore/"
+        self.calls.append("list")
+        data, _ = self.items[(BUCKET, KEY)]
+        return {
+            "Contents": [{
+                "Key": KEY, "Size": len(data),
+                "LastModified": datetime.now(timezone.utc),
+                "StorageClass": "STANDARD",
+            }],
+            "IsTruncated": False,
+        }
+
     def get_object(self, *, Bucket, Key):
         self.calls.append("get")
         return {"Body": io.BytesIO(self.items[(Bucket, Key)][0])}
@@ -61,7 +82,12 @@ def main() -> None:
     fetch_and_verify_encrypted_archive(
         s3, bucket=BUCKET, key=KEY, destination=args.downloaded,
     )
-    assert s3.calls == ["put", "head", "get"]
+    report = inspect_remote_backups(s3, bucket=BUCKET, prefix="footscore")
+    assert report["complete_listing"]
+    assert report["freshness"]["state"] == "recent_unverified"
+    assert report["retention_plan"]["delete_calls"] == 0
+    assert report["retention_plan"]["candidate_count"] == 0
+    assert s3.calls == ["put", "head", "get", "list"]
     assert args.downloaded.read_bytes() == args.encrypted.read_bytes()
     print("Mock S3 upload + authenticated download of real CI archive succeeded.")
 
