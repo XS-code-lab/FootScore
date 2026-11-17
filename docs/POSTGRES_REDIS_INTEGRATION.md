@@ -54,7 +54,7 @@ flag only in the isolated integration job.
 
 ## What the integration test establishes
 
-- PostgreSQL migrations 0001–0009 apply and can reverse on an
+- PostgreSQL migrations 0001–0010 apply and can reverse on an
   empty disposable database.
 - Six concurrent clients reserve against a rolling 60-second
   two-request limit: exactly two reservations succeed and four
@@ -69,6 +69,8 @@ flag only in the isolated integration job.
   and two concurrent password reset consumers cannot use one code twice.
 - Two concurrent all-session revoke requests with the same JWT version
   yield exactly one successful revocation (compare-and-swap).
+- Two concurrent encrypted SMTP-outbox workers claim separate messages
+  under PostgreSQL row locks; no real SMTP connection is made in CI.
 - Real Redis receives an update published from a committed
   PostgreSQL outbox row, and the HTTP replay endpoint returns it.
 - A deliberately failed ingestion transaction does not persist
