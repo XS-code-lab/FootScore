@@ -7,7 +7,20 @@ import httpx
 
 
 class ProviderError(RuntimeError):
-    pass
+    """Provider failure without credentials or private response data."""
+
+    def __init__(self, message: str, *, status_code: int | None = None):
+        super().__init__(message)
+        self.status_code = status_code
+
+
+class ProviderRateLimitError(ProviderError):
+    """429 from provider: caller must stop, not automatically retry."""
+
+    def __init__(self, retry_after_seconds: int | None):
+        super().__init__("API-Football rate-limited this request", status_code=429)
+        self.retry_after_seconds = retry_after_seconds
+
 
 
 @dataclass(frozen=True)
@@ -65,24 +78,39 @@ class ApiFootballClient:
         )
 
     def _get(self, path: str, params: dict[str, int]) -> list[dict]:
+        """One HTTP call only. Any retry must reserve fresh quota externally."""
         try:
             response = self.client.get(path, params=params)
-            response.raise_for_status()
+        except httpx.RequestError as exc:
+            raise ProviderError("API-Football transport request failed") from exc
+        if response.status_code == 429:
+            raw = response.headers.get("retry-after", "")
+            wait = int(raw) if raw.isdigit() else None
+            raise ProviderRateLimitError(wait)
+        if response.is_error:
+            raise ProviderError(
+                "API-Football HTTP request failed",
+                status_code=response.status_code,
+            )
+        try:
             data = response.json()
-            if not isinstance(data, dict) or data.get("errors"):
-                raise ProviderError("API-Football reported an API error")
-            items = data.get("response")
-            if not isinstance(items, list):
-                raise ProviderError("Unexpected API-Football response structure")
-            return items
-        except (httpx.HTTPError, ValueError) as exc:
-            raise ProviderError("API-Football request failed") from exc
+        except ValueError as exc:
+            raise ProviderError("Invalid API-Football JSON response") from exc
+        if not isinstance(data, dict) or data.get("errors"):
+            raise ProviderError("API-Football reported an API error")
+        items = data.get("response")
+        if not isinstance(items, list) or any(not isinstance(x, dict) for x in items):
+            raise ProviderError("Unexpected API-Football response structure")
+        return items
 
     def fetch_fixtures(self, *, league: int, season: int) -> list[Fixture]:
-        return [
-            normalize_fixture(item)
-            for item in self._get("/fixtures", {"league": league, "season": season})
-        ]
+        try:
+            return [
+                normalize_fixture(item)
+                for item in self._get("/fixtures", {"league": league, "season": season})
+            ]
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ProviderError("Invalid API-Football fixture data") from exc
 
     def fetch_league_coverage(self, *, league: int, season: int) -> list[dict]:
         return self._get("/leagues", {"id": league, "season": season})
