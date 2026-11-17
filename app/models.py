@@ -258,3 +258,43 @@ class HistoricalPlayerFetch(Base):
         CheckConstraint("status IN ('imported', 'empty')"),
         CheckConstraint("players_imported >= 0"),
     )
+
+
+class ProviderRateLock(Base):
+    """One database lock row serializes in-app provider reservations."""
+
+    __tablename__ = "provider_rate_locks"
+    provider: Mapped[str] = mapped_column(String(40), primary_key=True)
+
+
+class ProviderRequestLog(Base):
+    """Rolling 60-second accounting of reserved HTTP calls."""
+
+    __tablename__ = "provider_request_log"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    provider: Mapped[str] = mapped_column(String(40), nullable=False)
+    reserved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    __table_args__ = (Index(
+        "ix_provider_request_log_provider_reserved_at", "provider", "reserved_at",
+    ),)
+
+
+class LeagueCoverageProbe(Base):
+    """Provider-declared feature hints, never proof of season completeness."""
+
+    __tablename__ = "league_coverage_probes"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    provider: Mapped[str] = mapped_column(String(40), nullable=False)
+    provider_league_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    season: Mapped[int] = mapped_column(Integer, nullable=False)
+    reported_events: Mapped[bool | None] = mapped_column(Boolean)
+    reported_statistics_fixtures: Mapped[bool | None] = mapped_column(Boolean)
+    reported_statistics_players: Mapped[bool | None] = mapped_column(Boolean)
+    reported_lineups: Mapped[bool | None] = mapped_column(Boolean)
+    raw_coverage: Mapped[dict | None] = mapped_column(JSON)
+    fetched_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False,
+    )
+    __table_args__ = (
+        UniqueConstraint("provider", "provider_league_id", "season"),
+    )
