@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "footscore-backend"
-version = "0.7.0"
+version = "0.8.0"
 description = "FootScore backend API"
 requires-python = ">=3.11"
 dependencies = [
@@ -25,6 +25,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest>=8,<10", "ruff>=0.8,<1"]
 push = ["firebase-admin>=6.6,<9"]
+ml = ["scikit-learn>=1.5,<2"]
 
 [tool.setuptools.packages.find]
 include = ["app*"]
