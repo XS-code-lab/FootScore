@@ -11,6 +11,7 @@ from pathlib import Path
 from app.db import SessionLocal
 from app.ml.experiment import DatasetError, train_chronological_experiment
 from app.ml.features import export_unlabeled
+from app.ml.outcomes import propose_outcome_observations
 
 
 def _write_new(path: Path, content: str) -> None:
@@ -32,6 +33,12 @@ def main() -> None:
         "--position", choices=("attacker", "midfielder", "defender", "goalkeeper"),
     )
     export.add_argument("--output", type=Path, required=True)
+
+    proposal = sub.add_parser(
+        "propose-outcomes", help="Observe next-season data without producing training labels",
+    )
+    proposal.add_argument("--input", type=Path, required=True)
+    proposal.add_argument("--output", type=Path, required=True)
 
     train = sub.add_parser("train", help="Validated labeled JSONL to experiment JSON")
     train.add_argument("--input", type=Path, required=True)
@@ -62,17 +69,25 @@ def main() -> None:
                             rows.append(json.loads(line))
                         except json.JSONDecodeError as exc:
                             raise ValueError(f"Malformed JSON at line {index}") from exc
-            artifact = train_chronological_experiment(rows)
-            _write_new(args.output, json.dumps(
-                artifact, sort_keys=True, indent=2,
-            ) + "\n")
-            print(json.dumps({
-                "model": artifact["model_type"],
-                "approved_for_production": artifact["approved_for_production"],
-                "train_count": artifact["train_count"],
-                "validation_count": artifact["validation_count"],
-                "metrics": artifact["metrics"],
-            }, indent=2))
+            if args.command == "propose-outcomes":
+                with SessionLocal() as session:
+                    proposals = propose_outcome_observations(session, rows)
+                _write_new(args.output, "".join(
+                    json.dumps(row, sort_keys=True) + "\n" for row in proposals
+                ))
+                print(f"Wrote {len(proposals)} audit candidates; 0 verified labels.")
+            else:
+                artifact = train_chronological_experiment(rows)
+                _write_new(args.output, json.dumps(
+                    artifact, sort_keys=True, indent=2,
+                ) + "\n")
+                print(json.dumps({
+                    "model": artifact["model_type"],
+                    "approved_for_production": artifact["approved_for_production"],
+                    "train_count": artifact["train_count"],
+                    "validation_count": artifact["validation_count"],
+                    "metrics": artifact["metrics"],
+                }, indent=2))
     except (ValueError, DatasetError, FileExistsError, OSError) as exc:
         parser.error(str(exc))
 
