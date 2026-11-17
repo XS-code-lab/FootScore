@@ -14,6 +14,12 @@ class Settings(BaseSettings):
     sync_interval_minutes: int = 360
     jwt_secret: SecretStr | None = None
     access_token_minutes: int = 60
+    require_verified_email: bool = False
+    smtp_host: str | None = None
+    smtp_port: int = 465
+    smtp_username: str | None = None
+    smtp_password: SecretStr | None = None
+    smtp_sender: str | None = None
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
