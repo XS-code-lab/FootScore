@@ -84,6 +84,9 @@ class ApiFootballClient:
             for item in self._get("/fixtures", {"league": league, "season": season})
         ]
 
+    def fetch_league_coverage(self, *, league: int, season: int) -> list[dict]:
+        return self._get("/leagues", {"id": league, "season": season})
+
     def fetch_events(self, *, fixture_id: int) -> list[dict]:
         return self._get("/fixtures/events", {"fixture": fixture_id})
 
