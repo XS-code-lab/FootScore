@@ -3,7 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.models import Competition, Match
+from app.models import Competition, Match, MatchEvent, TeamMatchStat
 
 router = APIRouter(prefix="/api/v1", tags=["football"])
 
@@ -45,3 +45,34 @@ def match_detail(match_id: int, db: Session = Depends(get_db)) -> dict:
         "provider": item.provider, "provider_id": item.provider_id,
         "observed_at": item.observed_at,
     }
+
+
+@router.get("/matches/{match_id}/events")
+def match_events(match_id: int, db: Session = Depends(get_db)) -> list[dict]:
+    if db.get(Match, match_id) is None:
+        raise HTTPException(status_code=404, detail="Match not found")
+    rows = db.scalars(
+        select(MatchEvent).where(MatchEvent.match_id == match_id)
+        .order_by(MatchEvent.minute, MatchEvent.id)
+    ).all()
+    return [
+        {"id": row.id, "kind": row.kind, "minute": row.minute,
+         "player_id": row.player_id, "payload": row.payload,
+         "observed_at": row.observed_at}
+        for row in rows
+    ]
+
+
+@router.get("/matches/{match_id}/statistics")
+def match_statistics(match_id: int, db: Session = Depends(get_db)) -> list[dict]:
+    if db.get(Match, match_id) is None:
+        raise HTTPException(status_code=404, detail="Match not found")
+    rows = db.scalars(
+        select(TeamMatchStat).where(TeamMatchStat.match_id == match_id)
+        .order_by(TeamMatchStat.team_id, TeamMatchStat.name)
+    ).all()
+    return [
+        {"team_id": row.team_id, "name": row.name, "value": row.value,
+         "observed_at": row.observed_at}
+        for row in rows
+    ]
