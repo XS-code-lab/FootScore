@@ -8,7 +8,8 @@ from datetime import date, datetime, time, timedelta, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import HistoricalPlayerFetch, Match
+from app.models import HistoricalPlayerFetch, Match, ProviderQuota
+from app.settings import settings
 
 FINAL_STATUSES = frozenset(("FT", "AET", "PEN"))
 MAX_RANGE_DAYS = 366
@@ -102,13 +103,26 @@ def plan_historical_backfill(
     pending = [
         row for row in report["fixtures"] if row["fetch_status"] in statuses
     ]
-    selected = pending[:max_requests]
+    today = datetime.now(timezone.utc).date()
+    usage = db.scalar(select(ProviderQuota.used).where(
+        ProviderQuota.provider == "api-football",
+        ProviderQuota.day == today,
+    )) or 0
+    # This is a local accounting estimate; another application sharing
+    # the provider key may have already consumed requests.
+    locally_available = max(
+        0, settings.provider_daily_limit - settings.provider_reserve - usage
+    )
+    selected = pending[:min(max_requests, locally_available)]
     return {
         "competition_id": competition_id,
         "window_start": report["window_start"],
         "window_end": report["window_end"],
         "pending_count": len(pending),
         "estimated_api_calls": len(selected),
+        "locally_recorded_requests_today": usage,
+        "local_remaining_budget": locally_available,
+        "provider_remaining_budget_confirmed": False,
         "max_requests": max_requests,
         "retry_empty": retry_empty,
         "dry_run": True,
@@ -121,6 +135,7 @@ def plan_historical_backfill(
         ],
         "notice": (
             "Plan only; execution requires API_FOOTBALL_KEY and --execute. "
-            "Each fixture consumes one nonrefundable provider quota reservation."
+            "Each fixture consumes one nonrefundable provider quota reservation. "
+            "Local remaining budget may differ from provider-account usage."
         ),
     }
