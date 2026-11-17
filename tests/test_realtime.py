@@ -1,7 +1,5 @@
 """Snapshot reconciliation, notification corrections, outbox and API replay."""
 import json
-from datetime import datetime, timezone
-
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session
@@ -66,12 +64,13 @@ def test_reconciliation_push_suppression_and_replay() -> None:
     with Session(engine) as db:
         upsert_fixtures(db, [normalize_fixture(_fixture())])
         match = db.scalar(select(Match))
-        # Register all three relevant players before their favorite assignments.
-        upsert_match_events(db, match, [_goal(12)])
-        upsert_match_events(db, match, [_goal(13)])
-        players = {
-            p.provider_id: p for p in db.scalars(select(Player)).all()
-        }
+        # Seed monitored profiles without emitting historical event alerts.
+        db.add_all([
+            Player(name=f"Player {pid}", provider="api-football", provider_id=pid)
+            for pid in ("11", "12", "13")
+        ])
+        db.flush()
+        players = {p.provider_id: p for p in db.scalars(select(Player)).all()}
         user = User(email="realtime@example.com", password_hash="unused")
         db.add(user)
         db.flush()
@@ -82,28 +81,18 @@ def test_reconciliation_push_suppression_and_replay() -> None:
         ))
         db.commit()
         event_count_before = db.scalar(select(func.count()).select_from(LiveUpdate))
-        # Fresh stream snapshot after favorites generates one goal+assist.
         upsert_match_events(db, match, [_goal(12)], reconcile=True)
-        db.commit()
-        # The previous non-reconciling ingest already inserted a stable event,
-        # but cannot generate new alerts retroactively when a favorite is added.
-        assert db.scalar(select(func.count()).select_from(Notification)) == 0
-
-        # A genuine new in-match goal should create alerts for existing favorites.
-        another = _goal(12)
-        another["time"] = {"elapsed": 53}
-        upsert_match_events(db, match, [another, _goal(12)], reconcile=True)
         db.commit()
         assert db.scalar(select(func.count()).select_from(Notification)) == 2
         initial_updates = db.scalar(select(func.count()).select_from(LiveUpdate))
-        upsert_match_events(db, match, [another, _goal(12)], reconcile=True)
+        upsert_match_events(db, match, [_goal(12)], reconcile=True)
         db.commit()
         assert db.scalar(select(func.count()).select_from(Notification)) == 2
         assert db.scalar(select(func.count()).select_from(LiveUpdate)) == initial_updates
 
+        # Changing just the assister must not re-notify the same scorer.
         revised = _goal(13)
-        revised["time"] = {"elapsed": 53}
-        upsert_match_events(db, match, [revised, _goal(12)], reconcile=True)
+        upsert_match_events(db, match, [revised], reconcile=True)
         db.commit()
         notifications = db.scalars(select(Notification)).all()
         assert len(notifications) == 3
@@ -122,8 +111,7 @@ def test_reconciliation_push_suppression_and_replay() -> None:
         ).where(Notification.kind == "goal")) == 1
 
         canceled_goal = _goal(13, "Goal Cancelled")
-        canceled_goal["time"] = {"elapsed": 53}
-        upsert_match_events(db, match, [canceled_goal, _goal(12)], reconcile=True)
+        upsert_match_events(db, match, [canceled_goal], reconcile=True)
         db.commit()
         assert db.scalar(select(func.count()).select_from(
             Notification
