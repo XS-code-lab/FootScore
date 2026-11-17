@@ -299,3 +299,46 @@ def test_two_parallel_password_resets_accept_one_token_only(monkeypatch) -> None
             AuthOneTimeToken.user_id == user_id,
         ))
         assert token.consumed_at is not None
+
+
+def test_concurrent_all_sessions_revocations_are_compare_and_swap(monkeypatch) -> None:
+    """Two concurrent requests with one stale JWT version cannot both succeed."""
+    from fastapi import HTTPException
+    from pydantic import SecretStr
+
+    from app.models import User
+    from app.security import hash_password
+    from app.services.session_security import revoke_all_sessions
+
+    monkeypatch.setattr(settings, "jwt_secret", SecretStr("ci-session-revoke-" * 3))
+    with SessionLocal.begin() as db:
+        user = User(
+            email="concurrent-revoke@example.com",
+            password_hash=hash_password("SharedPassword123!"),
+        )
+        db.add(user)
+        db.flush()
+        user_id = user.id
+        old_version = user.session_version
+
+    gate = Barrier(2)
+
+    def revoke() -> bool:
+        with SessionLocal() as db:
+            user = db.get(User, user_id)
+            gate.wait(timeout=10)
+            try:
+                revoke_all_sessions(
+                    db, user, "SharedPassword123!",
+                    expected_version=old_version,
+                )
+                return True
+            except HTTPException as exc:
+                assert exc.status_code == 401
+                return False
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(lambda _: revoke(), range(2)))
+    assert sorted(results) == [False, True]
+    with SessionLocal() as db:
+        assert db.get(User, user_id).session_version == old_version + 1
