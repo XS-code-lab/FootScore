@@ -91,6 +91,7 @@ def inspect_remote_backups(
     pages = 0
     next_token = None
     used_tokens = set()
+    seen_keys = set()
     while True:
         if pages >= MAX_PAGES:
             raise BackupInventoryError("Remote listing page cap exceeded")
@@ -101,6 +102,8 @@ def inspect_remote_backups(
             params["ContinuationToken"] = next_token
         page = s3.list_objects_v2(**params)
         pages += 1
+        if type(page.get("IsTruncated")) is not bool:
+            raise BackupInventoryError("Missing or invalid truncation flag")
         items = page.get("Contents", [])
         if not isinstance(items, list):
             raise BackupInventoryError("Invalid remote listing response")
@@ -112,8 +115,11 @@ def inspect_remote_backups(
                 raise BackupInventoryError("Invalid object entry")
             archive = _archive_from_object(item, prefix, now)
             if archive is not None:
+                if archive["key"] in seen_keys:
+                    raise BackupInventoryError("Duplicate archive in remote listing")
+                seen_keys.add(archive["key"])
                 matched.append(archive)
-        if not page.get("IsTruncated", False):
+        if not page["IsTruncated"]:
             break
         next_token = page.get("NextContinuationToken")
         if not isinstance(next_token, str) or not next_token or next_token in used_tokens:
@@ -187,6 +193,7 @@ def main() -> None:
     )
     args = parser.parse_args()
     try:
+        validate_destination(args.bucket, args.prefix)
         import boto3
 
         report = inspect_remote_backups(
