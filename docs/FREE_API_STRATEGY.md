@@ -26,12 +26,15 @@ Official references:
 
 ## Implementation status
 Implemented: fixture adapter, idempotent fixture/event/player-stat ingestion,
-PostgreSQL and SQLite daily quota reservation, versioned Alembic migrations,
+PostgreSQL/SQLite daily quota and rolling-60-second request reservation,
+versioned Alembic migrations,
 small pilot recurring sync, Redis/WebSocket match streams, U22 scouting,
 notification inbox and optional FCM outbox. Historical fixture-player backfill
 now has a quota-aware dry-run planner and local fetch receipt audit.
+League-season provider feature probes can be run explicitly after configuring
+a server-side API key; coverage flags are NOT proof of full season data.
 
-Not implemented / not production-verified: global per-minute quota coordinator,
+Not implemented / not production-verified: cross-application per-minute coordination,
 429 exponential retry, provider account-wide usage reconciliation, full fixture
 and player-stat season completeness audit, cross-provider identity matching,
 complete VAR correctness, multi-worker outbox locking, live API load testing,
