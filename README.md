@@ -25,9 +25,10 @@ Swagger API: http://127.0.0.1:8000/docs
 - `GET /api/v1/matches/{match_id}`
 
 Configure `DATABASE_URL` and `API_FOOTBALL_KEY` in a local `.env`.
-Provider fixtures can be fetched with `ApiFootballClient` and persisted through
-`upsert_fixtures`; fetching is **not** automatically scheduled.
-Database tables must be provisioned separately before calling database endpoints;
-migrations are planned next. Never commit real API keys.
+To import a league manually after setting the API key, run:
+`python -m app.cli --league 39 --season 2026`.
+The command bootstraps tables for local development and reserves 10 of the 100 daily API requests.
+It is **not** automatically scheduled. The daily quota guard is designed for one import
+process at a time; production concurrency-safe quotas and Alembic migrations are still pending. Never commit real API keys.
 
 See [the phased development plan](docs/BACKEND_ROADMAP.md).
