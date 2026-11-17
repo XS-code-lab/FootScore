@@ -1,6 +1,4 @@
 """Authenticated favorites, event inbox, final rating, tenant isolation and push queue."""
-from datetime import datetime, timezone
-
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
 from sqlalchemy import create_engine, func, select
@@ -191,8 +189,8 @@ def test_auth_favorites_notifications_and_delivery(monkeypatch) -> None:
             f"/api/v1/favorites/players/{player_ids['11']}", headers=scout,
         ).status_code == 204
         assert len(client.get("/api/v1/favorites/players", headers=scout).json()) == 1
-        assert client.delete("/api/v1/notifications/devices", headers=scout,
-                             json={"token": device_token}).status_code == 204
+        assert client.request("DELETE", "/api/v1/notifications/devices", headers=scout,
+                              json={"token": device_token}).status_code == 204
     finally:
         app.dependency_overrides.clear()
 
