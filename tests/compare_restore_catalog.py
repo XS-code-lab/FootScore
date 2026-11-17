@@ -28,11 +28,11 @@ INDEX_QUERY = """
     ORDER BY tablename, indexname
 """
 CONSTRAINT_QUERY = """
-    SELECT rel.relname, constraint.conname,
-           constraint.contype, constraint.convalidated,
-           pg_get_constraintdef(constraint.oid, true)
-    FROM pg_constraint AS constraint
-    JOIN pg_class AS rel ON rel.oid = constraint.conrelid
+    SELECT rel.relname, c.conname,
+           c.contype, c.convalidated,
+           pg_get_constraintdef(c.oid, true)
+    FROM pg_constraint AS c
+    JOIN pg_class AS rel ON rel.oid = c.conrelid
     JOIN pg_namespace AS ns ON ns.oid = rel.relnamespace
     WHERE ns.nspname = 'public'
     ORDER BY rel.relname, constraint.conname
