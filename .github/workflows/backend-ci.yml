@@ -121,7 +121,9 @@ jobs:
             python tests/backup_drill_check.py verify
           # Independently audit schema, critical tables and orphaned
           # outbox links using ONLY the isolated restored database.
-          python -m app.restore_audit verify --target footscore_restore_ci
+          python -m app.restore_audit verify --target footscore_restore_ci \
+            > "$RUNNER_TEMP/footscore-restore-audit.json"
+          python -c 'import json,os; from pathlib import Path; r=json.loads((Path(os.environ["RUNNER_TEMP"])/"footscore-restore-audit.json").read_text()); assert r["schema_matches_current_head"] and r["foreign_key_constraints_validated"] and r["orphan_outbox_rows"] == 0 and r["critical_table_count"] == 6 and r["audit_elapsed_seconds"] >= 0; print("Independent restored schema/foreign-key/time audit passed")'
           python tests/backup_drill_check.py verify
           # Guard: the helper must refuse to overwrite an existing restore DB.
           if docker run --rm --network host \
