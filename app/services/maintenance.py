@@ -1,7 +1,7 @@
 """Bounded retention sweep for stale authentication state."""
 from datetime import datetime, timezone
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import AuthOneTimeToken, AuthRateBucket
