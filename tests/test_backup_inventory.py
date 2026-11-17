@@ -113,6 +113,8 @@ def test_missing_backup_and_unknown_objects_are_not_called_healthy():
     {"Contents": [{}], "IsTruncated": True},
     {"Contents": [{}], "IsTruncated": True, "NextContinuationToken": ""},
     {"Contents": [None], "IsTruncated": False},
+    {"Contents": [], "IsTruncated": "false"},
+    {"Contents": []},
 ])
 def test_bad_page_fails_closed_without_false_success(page):
     fake = FakeInventoryS3([page])
@@ -170,6 +172,31 @@ def test_invalid_policy_does_not_contact_s3(settings):
         )
     assert not fake.calls
 
+
+
+
+def test_duplicate_archive_between_pages_fails_closed():
+    same = make_object(0, uid="a" * 32)
+    fake = FakeInventoryS3([
+        {"Contents": [same], "IsTruncated": True, "NextContinuationToken": "1"},
+        {"Contents": [same], "IsTruncated": False},
+    ])
+    with pytest.raises(BackupInventoryError, match="Duplicate"):
+        inspect_remote_backups(fake, bucket=BUCKET, now=NOW)
+    assert fake.mutations == []
+
+
+def test_due_to_unknown_cloud_state_no_deletion_ever_runs():
+    fake = FakeInventoryS3([
+        {"Contents": [make_object(90, uid=f"{n:032x}") for n in range(4)],
+         "IsTruncated": False},
+    ])
+    result = inspect_remote_backups(
+        fake, bucket=BUCKET, now=NOW, retention_days=30, keep_latest=3,
+    )
+    assert result["retention_plan"]["candidate_count"] == 1
+    assert result["retention_plan"]["delete_calls"] == 0
+    assert fake.mutations == []
 
 def test_provider_listing_failure_propagates_instead_of_empty_success():
     class BrokenS3:
