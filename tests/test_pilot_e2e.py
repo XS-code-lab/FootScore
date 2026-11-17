@@ -201,6 +201,9 @@ def test_full_pilot_data_flow_through_public_api(monkeypatch) -> None:
 
         with TestClient(app) as api:
             assert api.get("/api/v1/health").json() == {"status": "ok"}
+            assert api.get("/ready").json() == {
+                "status": "ready", "database": "connected",
+            }
             matches = api.get("/api/v1/matches").json()
             assert len(matches) == 1
             assert matches[0]["competition_id"] == competition_id
