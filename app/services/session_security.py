@@ -13,7 +13,8 @@ from app.security import hash_password, verify_password
 
 
 def _revoke(
-    db: Session, user: User, *, password_hash: str | None = None,
+    db: Session, user: User, *, expected_version: int,
+    password_hash: str | None = None,
 ) -> None:
     """Advance the session version if the credential snapshot is still current."""
     statement = (
@@ -21,7 +22,7 @@ def _revoke(
         .where(
             User.id == user.id,
             User.is_active.is_(True),
-            User.session_version == user.session_version,
+            User.session_version == expected_version,
         )
         .values(session_version=User.session_version + 1)
     )
@@ -35,15 +36,18 @@ def _revoke(
     db.commit()
 
 
-def revoke_all_sessions(db: Session, user: User, current_password: str) -> None:
+def revoke_all_sessions(
+    db: Session, user: User, current_password: str, *, expected_version: int,
+) -> None:
     """Require reauthentication before logging out every existing device."""
     if not verify_password(current_password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid current password")
-    _revoke(db, user)
+    _revoke(db, user, expected_version=expected_version)
 
 
 def change_password(
     db: Session, user: User, current_password: str, new_password: str,
+    *, expected_version: int,
 ) -> None:
     """Change password and atomically revoke all existing JWT access tokens."""
     if not verify_password(current_password, user.password_hash):
@@ -54,4 +58,7 @@ def change_password(
         )
     if not 12 <= len(new_password) <= 128:
         raise HTTPException(status_code=422, detail="Invalid new password length")
-    _revoke(db, user, password_hash=hash_password(new_password))
+    _revoke(
+        db, user, expected_version=expected_version,
+        password_hash=hash_password(new_password),
+    )
