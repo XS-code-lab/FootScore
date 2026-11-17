@@ -18,7 +18,10 @@ from app.models import AuthRateBucket
 from app.settings import settings
 
 WINDOW_SECONDS = 900
-LIMITS = {"login": 10, "register": 5, "verify": 3, "reset": 3}
+LIMITS = {
+    "login": 10, "register": 5, "verify": 3, "reset": 3,
+    "password_change": 5, "revoke_all": 5,
+}
 
 
 def _peer_key(request: Request, action: str, now: datetime) -> str:
