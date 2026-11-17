@@ -12,3 +12,9 @@ data/ml/
 models/
 *.joblib
 *.pkl
+
+# Never commit database backups or restore artifacts: they contain user data.
+*.dump
+*.backup
+*.pgdump
+backups/
