@@ -1,9 +1,14 @@
 """Read-only remote backup inventory: strict, bounded, no DeleteObject."""
+import json
+import sys
+from types import SimpleNamespace
 from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from app.backup_inventory import BackupInventoryError, inspect_remote_backups
+from app.backup_inventory import (
+    BackupInventoryError, inspect_remote_backups, main,
+)
 
 
 NOW = datetime(2026, 11, 18, 12, 0, tzinfo=timezone.utc)
@@ -204,3 +209,55 @@ def test_provider_listing_failure_propagates_instead_of_empty_success():
             raise OSError("synthetic cloud outage")
     with pytest.raises(OSError, match="cloud outage"):
         inspect_remote_backups(BrokenS3(), bucket=BUCKET, now=NOW)
+
+
+def test_read_only_cli_strict_exits_two_when_no_recent_archive(
+    monkeypatch, capsys,
+):
+    fake = FakeInventoryS3([{"Contents": [], "IsTruncated": False}])
+    monkeypatch.setitem(
+        sys.modules, "boto3", SimpleNamespace(client=lambda service: fake),
+    )
+    monkeypatch.setattr(
+        sys, "argv", [
+            "backup_inventory", "--bucket", BUCKET, "--strict",
+        ],
+    )
+    with pytest.raises(SystemExit) as error:
+        main()
+    assert error.value.code == 2
+    report = json.loads(capsys.readouterr().out)
+    assert report["freshness"]["state"] == "missing"
+    assert report["retention_plan"]["dry_run"]
+    assert fake.mutations == []
+
+
+def test_read_only_cli_reports_recent_unverified_not_recovery_verified(
+    monkeypatch, capsys,
+):
+    # Use the actual wall clock because main() intentionally samples UTC now.
+    newest = datetime.now(timezone.utc)
+    key = (
+        f"footscore/{newest:%Y/%m/%d}/"
+        f"{newest:%Y%m%dT%H%M%S%fZ}-{'d' * 32}.fsbak"
+    )
+    fake = FakeInventoryS3([{
+        "Contents": [{
+            "Key": key, "Size": 5000,
+            "LastModified": newest + timedelta(seconds=1),
+        }],
+        "IsTruncated": False,
+    }])
+    monkeypatch.setitem(
+        sys.modules, "boto3", SimpleNamespace(client=lambda service: fake),
+    )
+    monkeypatch.setattr(
+        sys, "argv", [
+            "backup_inventory", "--bucket", BUCKET, "--strict",
+        ],
+    )
+    main()
+    report = json.loads(capsys.readouterr().out)
+    assert report["freshness"]["state"] == "recent_unverified"
+    assert report["freshness"]["restore_verified"] is False
+    assert fake.mutations == []
