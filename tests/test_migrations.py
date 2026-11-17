@@ -20,7 +20,7 @@ def test_initial_upgrade_and_downgrade(tmp_path: Path, monkeypatch) -> None:
             "historical_player_fetches", "provider_rate_locks",
             "provider_request_log", "league_coverage_probes",
             "auth_rate_buckets", "auth_one_time_tokens",
-            "email_deliveries"} <= tables
+            "email_deliveries", "backup_alert_states"} <= tables
     assert "ix_live_updates_published_created" in {
         ix["name"] for ix in inspect(engine).get_indexes("live_updates")
     }
@@ -35,3 +35,4 @@ def test_initial_upgrade_and_downgrade(tmp_path: Path, monkeypatch) -> None:
     assert "auth_rate_buckets" not in inspect(engine).get_table_names()
     assert "auth_one_time_tokens" not in inspect(engine).get_table_names()
     assert "email_deliveries" not in inspect(engine).get_table_names()
+    assert "backup_alert_states" not in inspect(engine).get_table_names()
