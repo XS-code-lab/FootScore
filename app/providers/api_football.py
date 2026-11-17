@@ -90,5 +90,11 @@ class ApiFootballClient:
     def fetch_statistics(self, *, fixture_id: int) -> list[dict]:
         return self._get("/fixtures/statistics", {"fixture": fixture_id})
 
+    def fetch_fixture_players(self, *, fixture_id: int) -> list[dict]:
+        return self._get("/fixtures/players", {"fixture": fixture_id})
+
+    def fetch_player_profile(self, *, player_id: int, season: int) -> list[dict]:
+        return self._get("/players", {"id": player_id, "season": season})
+
     def close(self) -> None:
         self.client.close()
