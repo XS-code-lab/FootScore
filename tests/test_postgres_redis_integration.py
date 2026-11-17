@@ -6,7 +6,7 @@ isolated service containers, runs Alembic, and explicitly enables this module.
 import json
 import os
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+import time
 from threading import Barrier
 
 import pytest
@@ -105,7 +105,12 @@ def test_redis_pubsub_durable_outbox_and_http_replay() -> None:
             count = drain_outbox(db, redis)
         assert count >= 1
         # PubSub subscription is active before publishing; receive real Redis data.
-        message = pubsub.get_message(ignore_subscribe_messages=True, timeout=5.0)
+        deadline = time.monotonic() + 5
+        message = None
+        while message is None and time.monotonic() < deadline:
+            message = pubsub.get_message(
+                ignore_subscribe_messages=True, timeout=1.0,
+            )
         assert message is not None, "Redis never published the committed update"
         assert message["type"] == "message"
         payload = json.loads(message["data"])
@@ -136,15 +141,25 @@ def test_postgres_transaction_rollback_preserves_stream_consistency() -> None:
     from app.models import LiveUpdate
     from app.services.live_updates import record_update
 
+    fixture = normalize_fixture({
+        "fixture": {"id": 990124, "date": "2026-11-17T19:00:00Z",
+                    "status": {"short": "1H"}},
+        "league": {"id": 990, "name": "CI Integration League"},
+        "teams": {"home": {"id": 9901, "name": "CI Home"},
+                  "away": {"id": 9902, "name": "CI Away"}},
+        "goals": {"home": 0, "away": 0},
+    })
     with SessionLocal.begin() as db:
-        match = db.scalar(select(Match).where(Match.provider_id == "990123"))
-        assert match is not None
+        upsert_fixtures(db, [fixture])
+        db.flush()
+        match = db.scalar(select(Match).where(Match.provider_id == "990124"))
+        match_id = match.id
         before = db.scalar(select(func.count()).select_from(
             LiveUpdate
-        ).where(LiveUpdate.match_id == match.id))
+        ).where(LiveUpdate.match_id == match_id))
     try:
         with SessionLocal.begin() as db:
-            record_update(db, match.id, "test_rolled_back", {"unexpected": True})
+            record_update(db, match_id, "test_rolled_back", {"unexpected": True})
             db.flush()
             raise ValueError("Simulated ingestion failure")
     except ValueError:
@@ -152,5 +167,5 @@ def test_postgres_transaction_rollback_preserves_stream_consistency() -> None:
     with SessionLocal() as db:
         after = db.scalar(select(func.count()).select_from(
             LiveUpdate
-        ).where(LiveUpdate.match_id == match.id))
+        ).where(LiveUpdate.match_id == match_id))
     assert after == before
