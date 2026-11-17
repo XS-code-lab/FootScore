@@ -1,5 +1,14 @@
 # FootScore backend v0.13 — outbox and auth abuse guardrails
 
+## Operator observability and outage recovery (v0.17)
+Local-only `python -m app.ops_cli` prints queue backlog ages, failed
+security-email counts and local API-Football budgets. The optional
+`--strict` flag exits nonzero on lag alerts, but this is **not** a
+public health or metrics API. Redis publisher retries failed transports
+with bounded 1–30-second backoff and finite socket timeouts; failed SQL
+acks roll back so Redis reconnect can replay rows. See
+[OPS_MONITORING.md](OPS_MONITORING.md).
+
 ## Multiple Redis outbox publisher workers
 The `drain_outbox` query selects unpublished `live_updates`
 under PostgreSQL `SELECT ... FOR UPDATE SKIP LOCKED`. It locks selected
