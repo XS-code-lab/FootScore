@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     api_football_base_url: str = "https://v3.football.api-sports.io"
     provider_daily_limit: int = 100
     provider_reserve: int = 10
+    redis_url: str | None = None
     sync_leagues: str = ""
     sync_interval_minutes: int = 360
     jwt_secret: SecretStr | None = None
