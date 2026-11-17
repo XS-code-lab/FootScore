@@ -6,7 +6,7 @@ otherwise all NAT/proxy users share a peer bucket (safe but inconvenient).
 """
 import hashlib
 import hmac
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from fastapi import HTTPException, Request
 from sqlalchemy import select
