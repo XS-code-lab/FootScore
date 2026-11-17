@@ -31,6 +31,7 @@ Backend-only live football, U22 scouting and AI-analysis platform (work in progr
 - Encrypted transactional security-email outbox with bounded SMTP retries and optional background worker.
 - Read-only operator queue-lag/API-budget snapshot and bounded Redis reconnection with replay-safe SQL rollback.
 - Non-overwriting PostgreSQL custom-format backup and isolated restore CI drill for test data.
+- Streaming AES-256-GCM encryption and authentication of database archives with independent backup key.
 
 ## Requirements
 Python 3.11+ or Docker, an API-Football key for real requests. No API key is needed for offline tests.
