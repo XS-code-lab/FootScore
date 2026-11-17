@@ -357,3 +357,22 @@ class EmailDelivery(Base):
         CheckConstraint("attempts >= 0"),
         Index("ix_email_deliveries_status_next_attempt", "status", "next_attempt_at"),
     )
+
+
+class BackupAlertState(Base):
+    """One aggregate per backup scope; no object names or webhook URLs stored."""
+
+    __tablename__ = "backup_alert_states"
+    scope_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    condition: Mapped[str] = mapped_column(
+        String(24), nullable=False, default="unknown",
+    )
+    notified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False,
+    )
+    __table_args__ = (
+        CheckConstraint(
+            "condition IN ('unknown', 'recent_unverified', 'missing', 'stale', 'error')"
+        ),
+    )
