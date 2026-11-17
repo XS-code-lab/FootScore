@@ -4,6 +4,9 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
+from cryptography.fernet import Fernet
+
+from app.services.email_outbox import drain_email_outbox
 from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
@@ -29,6 +32,9 @@ def _setup(monkeypatch):
     app.dependency_overrides[get_db] = override_db
     monkeypatch.setattr(settings, "jwt_secret", SecretStr("recovery-test-" * 4))
     monkeypatch.setattr(settings, "require_verified_email", True)
+    monkeypatch.setattr(
+        settings, "email_queue_key", SecretStr(Fernet.generate_key().decode()),
+    )
     messages = []
     monkeypatch.setattr(account_recovery, "email_is_configured", lambda: True)
     monkeypatch.setattr(
@@ -36,6 +42,13 @@ def _setup(monkeypatch):
         lambda email, token, purpose: messages.append((email, token, purpose)),
     )
     return engine, messages
+
+
+def _deliver(engine) -> dict:
+    with Session(engine) as session:
+        counts = drain_email_outbox(session)
+        session.commit()
+        return counts
 
 
 def test_verification_password_reset_one_time_and_jwt_revocation(monkeypatch):
@@ -46,6 +59,8 @@ def test_verification_password_reset_one_time_and_jwt_revocation(monkeypatch):
                 "email": "Reviewer@Example.com", "password": "OriginalStrong123!",
             })
             assert response.status_code == 201
+            assert not sent  # API enqueues transactionally; SMTP is separate.
+            assert _deliver(engine)["sent"] == 1
             assert len(sent) == 1
             address, verification_code, purpose = sent.pop()
             assert (address, purpose) == ("reviewer@example.com", "verify_email")
@@ -93,6 +108,8 @@ def test_verification_password_reset_one_time_and_jwt_revocation(monkeypatch):
             })
             assert unknown.status_code == known.status_code == 202
             assert unknown.json() == known.json()
+            assert not sent
+            assert _deliver(engine)["sent"] == 1
             assert len(sent) == 1
             _, reset_code, reset_purpose = sent.pop()
             assert reset_purpose == "reset_password"
@@ -154,6 +171,8 @@ def test_unknown_request_expiration_and_cleanup(monkeypatch):
             assert client.post("/api/v1/auth/verification/request", json={
                 "email": "test@example.com",
             }).status_code == 202
+            assert not sent
+            assert _deliver(engine)["sent"] == 1
             assert len(sent) == 1
             _, token, purpose = sent.pop()
             assert purpose == "verify_email"
