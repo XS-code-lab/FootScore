@@ -6,7 +6,7 @@ from app.api.live_ws import router as live_router
 from app.api.scouting import router as scouting_router
 from app.api.scouting_discovery import router as discovery_router
 
-app = FastAPI(title="FootScore API", version="0.9.0")
+app = FastAPI(title="FootScore API", version="0.10.0")
 app.include_router(football_router)
 app.include_router(scouting_router)
 app.include_router(discovery_router)
