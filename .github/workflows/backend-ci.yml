@@ -80,7 +80,7 @@ jobs:
           # Test-only hex key; NEVER reuse in any real deployment.
           FOOTSCORE_BACKUP_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
         run: |
-          set -eu
+          set -euo pipefail
           mkdir -p "$RUNNER_TEMP/footscore-ci-backup"
           chmod 700 "$RUNNER_TEMP/footscore-ci-backup"
           # Create mode-0600 archives owned by the runner, not Docker root.
@@ -132,8 +132,10 @@ jobs:
           python -c 'import json,os; from pathlib import Path; r=json.loads((Path(os.environ["RUNNER_TEMP"])/"footscore-content-compare.json").read_text()); assert r["all_tables_match"] and not r["mismatched_tables"] and r["compared_tables"] >= 15 and r["compared_source_rows"] >= 1500 and r["compared_source_rows"] == r["compared_restored_rows"] and not r["raw_rows_or_hashes_exported"]; print("Independent full-row content comparison passed for all application tables")'
           # Catalog comparison runs before any post-restore writes, on
           # the quiescent synthetic source and untouched restored target.
+          # Emit only safe catalog names and aggregate counts on mismatch.
+          # Preserve the verifier's nonzero status through tee.
           python tests/compare_restore_catalog.py --target footscore_restore_ci \
-            > "$RUNNER_TEMP/footscore-catalog-compare.json"
+            | tee "$RUNNER_TEMP/footscore-catalog-compare.json"
           python -c 'import json,os; from pathlib import Path; r=json.loads((Path(os.environ["RUNNER_TEMP"])/"footscore-catalog-compare.json").read_text()); assert r["catalogs_match"] and r["index_count"] >= 10 and r["constraint_count"] >= 10 and r["sequence_count"] >= 5 and all(not v for v in r["mismatched_objects"].values()) and not r["sequence_values_exported"]; print("Restored indexes, constraints and sequence state match source")'
           # FastAPI must point strictly to the disposable restored DB.
           # The write checks prove that restored ID sequences can advance.
