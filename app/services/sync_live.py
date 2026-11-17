@@ -40,7 +40,7 @@ def sync_match_details(match_id: int, *, events: bool = True,
             raw = client.fetch_events(fixture_id=fixture_id)
             with SessionLocal.begin() as session:
                 events_count = upsert_match_events(
-                    session, session.get(Match, match_id), raw,
+                    session, session.get(Match, match_id), raw, reconcile=True,
                 )
         if statistics:
             with SessionLocal.begin() as session:
