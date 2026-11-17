@@ -73,6 +73,8 @@ This U22 leaderboard is a transparent sample-adjusted baseline, **not an AI
 potential prediction**, and is not adjusted for league strength or position.
 Only completed fixtures and players with verified DOB and provider rating count.
 Authentication requires a strong `JWT_SECRET` environment variable (32+ characters).
+Generate it with `python -c "import secrets; print(secrets.token_urlsafe(48))"`.
+Use HTTPS and add a rate limit before exposing account routes publicly.
 Set it before using register/login with JWT. Run `alembic upgrade head` again.
 Optional push dispatcher: install `pip install -e '.[push]'`, configure
 Firebase Admin credentials, register a device from an authenticated client
