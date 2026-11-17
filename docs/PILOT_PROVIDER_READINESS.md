@@ -49,6 +49,8 @@ All in-app API-Football calls now reserve against **one atomic transaction**:
   provider policy reported for the free plan).
 - One PostgreSQL lock row per provider serializes all in-app callers,
   avoiding races between scheduler, imports, player details and probes.
+  The PostgreSQL server clock is sampled **after** obtaining that lock;
+  otherwise blocked workers can undercount recent reservations.
 - The reservation commits *before* HTTP and is not refunded on failures.
 - A sliding window spans UTC minute boundaries; 8 at 12:00:59 cannot
   become another 8 at 12:01:00.
