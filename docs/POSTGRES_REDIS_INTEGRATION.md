@@ -59,6 +59,11 @@ flag only in the isolated integration job.
 - Six concurrent clients reserve against a rolling 60-second
   two-request limit: exactly two reservations succeed and four
   are rejected. Failed attempts do not consume the daily budget.
+- **Race condition fixed after the first real PostgreSQL test:** the
+  reservation clock is read from PostgreSQL via `clock_timestamp()`
+  **after** the provider row lock is acquired. Reading the timestamp
+  before waiting for the lock could incorrectly exclude already-committed
+  reservations that were 'in the future' relative to a blocked caller.
 - Real Redis receives an update published from a committed
   PostgreSQL outbox row, and the HTTP replay endpoint returns it.
 - A deliberately failed ingestion transaction does not persist
