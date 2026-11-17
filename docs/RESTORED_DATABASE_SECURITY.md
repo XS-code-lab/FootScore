@@ -1,5 +1,9 @@
 # FootScore v0.27 — restored PostgreSQL permissions and security checks
 
+Backend v0.28 adds a read-only runtime-role privilege policy CLI and an
+actual separate LOGIN role with DML but without owner/schema powers in
+the disposable restored database. See POSTGRES_RUNTIME_ROLES.md.
+
 The preceding isolated recovery drill validated a real synthetic pg_dump,
 AES-256-GCM authentication, mock S3 round-trip, all table row contents,
 49 indexes, 81 constraints, 21 sequences and FastAPI reads/writes.
