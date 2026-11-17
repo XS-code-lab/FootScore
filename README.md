@@ -13,6 +13,8 @@ Backend-only live football, U22 scouting and AI-analysis platform (work in progr
 - Read-only U22 established and emerging leaderboards with sample-size shrinkage.
 - New position+competition peer-relative U22 discovery with coverage and uncertainty flags.
 - Offline, audited-label ML experiment with chronological holdout and JSON coefficients.
+- Safe historical fixture/player backfill planning, observed-response receipts and local coverage audits.
+- Next-season outcome observation proposals that explicitly refuse automatic ML labels.
 - Read endpoints for match event timelines and team match statistics.
 - User registration/login, authenticated favorites, notification preferences and inbox.
 - One-time goal, assist and final rating alerts with optional FCM push outbox.
@@ -109,6 +111,25 @@ New scouting discovery reads existing match data without consuming new provider
 quota. Scores are **not probabilities or predictions**; only within-competition,
 within-position comparisons are supported when at least five peers are present.
 No league-strength normalization or validated real-data ML model exists yet.
+
+### Historical data audit (v0.9)
+Use a LOCAL competition ID and a date window. The default command is a
+**dry run** (zero external provider calls):
+```bash
+python -m app.historical_cli --competition-id 1 --start 2024-07-01 --end 2025-06-30 --max-requests 5
+```
+To actually fetch the selected fixture-player responses, configure the
+provider key and explicitly add `--execute`. One fixture costs one reserved
+request, and zero-player results are flagged as **unknown coverage**, not
+zero playing time. Use `--report` for local coverage status, not season proof.
+
+To inspect observed next-season minutes without generating ML labels:
+```bash
+python -m app.ml.cli propose-outcomes --input data/ml/unverified.jsonl --output data/ml/outcome-review.jsonl
+```
+This leaves all `target` values unset and demands manual, independently
+sourced auditing before any ML training. See
+[historical backfill and data coverage](docs/HISTORICAL_BACKFILL.md).
 
 ### Offline ML research (v0.8)
 Install the optional research dependencies: `pip install -e '.[dev,ml]'`.
