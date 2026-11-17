@@ -48,6 +48,8 @@ def run() -> None:
     import psycopg
     from psycopg import sql
 
+    from app.db_role_audit import audit_runtime_connection
+
     password = secrets.token_urlsafe(48)
     admin_params = {
         "host": "127.0.0.1", "port": os.environ.get("PGPORT", "5432"),
@@ -57,6 +59,9 @@ def run() -> None:
     role = sql.Identifier(RUNTIME_ROLE)
     with psycopg.connect(**admin_params) as admin:
         with admin.cursor() as owner:
+            admin_report = audit_runtime_connection(admin, "footscore")
+            assert not admin_report["runtime_role_policy_passed"]
+            assert admin_report["is_superuser"]
             owner.execute("SELECT 1 FROM pg_roles WHERE rolname = %s", (RUNTIME_ROLE,))
             if owner.fetchone() is not None:
                 raise RuntimeError("CI runtime role already exists")
@@ -125,6 +130,11 @@ def run() -> None:
                 # Authenticate as a truly distinct LOGIN, not SET ROLE under
                 # the privileged migration-owner connection.
                 with psycopg.connect(**runtime_params) as runtime:
+                    report = audit_runtime_connection(runtime, "footscore")
+                    assert report["runtime_role_policy_passed"]
+                    assert report["table_count"] > 15
+                    assert report["sequence_count"] > 15
+                    assert not report["role_names_or_credentials_exported"]
                     with runtime.cursor() as app:
                         app.execute("SELECT current_user, session_user")
                         assert app.fetchone() == (RUNTIME_ROLE, RUNTIME_ROLE)
@@ -197,7 +207,7 @@ def run() -> None:
                 )
     print(
         "Distinct CI LOGIN runtime can read/write matches and future tables, "
-        "but cannot modify schema, drop tables or grant permissions; "
+        "passes role audit but cannot modify schema, drop tables or grant permissions; "
         "temporary role and objects cleaned."
     )
 
