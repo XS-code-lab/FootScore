@@ -9,6 +9,8 @@ Backend-only live football, U22 scouting and AI-analysis platform (work in progr
 - API-Football adapter, idempotent fixture upserts and atomic daily quota reservations.
 - Optional standalone periodic scheduler for a **small pilot league set**.
 - Per-fixture goal/card/substitution/VAR event snapshots and team statistic ingestion.
+- Per-fixture player ratings/minutes/goals/assists and targeted player profile enrichment.
+- Read-only U22 established and emerging leaderboards with sample-size shrinkage.
 - Read endpoints for match event timelines and team match statistics.
 
 ## Requirements
@@ -50,7 +52,27 @@ on the number of leagues and additional API clients sharing the key.
 To fetch events and team statistics for one *existing* FootScore match (costs
 two provider requests), run: `python -m app.live_cli --match-id 1`.
 This is an explicit command rather than automatic polling to conserve quota.
-The app is not yet production-ready: no live WebSocket, player-rating
-sync, event correction reconciliation, scouting, Redis or notifications yet.
+For a selected fixture's player stats (one additional provider request):
+```bash
+python -m app.players_cli fixture --match-id 1
+```
+To enrich a player with verified birth date (another provider request):
+```bash
+python -m app.players_cli profile --provider-player-id 123 --season 2026
+```
+
+Additional API endpoints:
+- `GET /api/v1/matches/{match_id}/players`
+- `GET /api/v1/players/{player_id}`
+- `GET /api/v1/scouting/u22?category=established`
+- `GET /api/v1/scouting/u22?category=emerging`
+
+This U22 leaderboard is a transparent sample-adjusted baseline, **not an AI
+potential prediction**, and is not adjusted for league strength or position.
+Only completed fixtures and players with verified DOB and provider rating count.
+The app is not yet production-ready: no live WebSocket, event correction
+reconciliation, Redis, AI, favorites or notifications yet.
+
+See [U22 design](docs/U22_SCOUTING_DESIGN.md).
 
 See [roadmap](docs/BACKEND_ROADMAP.md) and [provider strategy](docs/FREE_API_STRATEGY.md).
