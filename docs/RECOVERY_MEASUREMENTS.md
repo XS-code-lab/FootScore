@@ -86,6 +86,11 @@ six critical tables, and an observed audit duration). It also tests
 phase timing reports and duration budgets, and retains the
 object-by-object synthetic restore comparison.
 
+Version 0.25 additionally verifies the *full content* of every public
+application table against the static, synthetic CI source after isolated
+restore. That comparison is limited to a **quiescent CI database**, not
+a live production snapshot (see RESTORE_CONTENT_INTEGRITY.md).
+
 No production dataset, real S3 cloud, high-availability failover,
 external provider API, actual SMTP mailbox or cloud credential is
 used. Large-database restore duration, WAL/PITR catch-up, application
