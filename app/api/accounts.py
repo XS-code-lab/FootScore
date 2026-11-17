@@ -12,7 +12,9 @@ from app.models import (
     FavoritePlayer, Notification, NotificationPreference, Player, PushDevice, User,
 )
 from app.security import current_user, hash_password, issue_token, verify_password
+from app.services import account_recovery
 from app.services.auth_rate import check_auth_limit
+from app.settings import settings
 
 router = APIRouter(prefix="/api/v1", tags=["accounts"])
 
@@ -31,6 +33,18 @@ class PreferencesUpdate(BaseModel):
     assists: bool | None = None
     final_rating: bool | None = None
     min_final_rating: float | None = Field(default=None, ge=0, le=10)
+
+
+class EmailRequest(BaseModel):
+    email: EmailStr
+
+
+class OneTimeCode(BaseModel):
+    token: str = Field(min_length=32, max_length=128)
+
+
+class PasswordResetConfirm(OneTimeCode):
+    new_password: str = Field(min_length=12, max_length=128)
 
 
 class DeviceRegistration(BaseModel):
@@ -78,6 +92,12 @@ def register(
     except IntegrityError as exc:
         db.rollback()
         raise HTTPException(status_code=409, detail="Email already registered") from exc
+    # Generate a code only if a secure SMTP sender has been configured.
+    # Do not expose the one-time code in an HTTP response or in logs.
+    if account_recovery.email_is_configured():
+        with db.begin():
+            pass
+        account_recovery.request_code(db, user.email, "verify_email")
     return {"id": user.id, "email": user.email}
 
 
@@ -91,12 +111,20 @@ def login(
         data.password, user.password_hash
     ):
         raise HTTPException(status_code=401, detail="Invalid email or password")
-    return {"access_token": issue_token(user.id), "token_type": "bearer"}
+    if settings.require_verified_email and user.email_verified_at is None:
+        raise HTTPException(status_code=403, detail="Email confirmation required")
+    return {
+        "access_token": issue_token(user.id, user.session_version),
+        "token_type": "bearer",
+    }
 
 
 @router.get("/auth/me")
 def me(user: User = Depends(current_user)) -> dict:
-    return {"id": user.id, "email": user.email}
+    return {
+        "id": user.id, "email": user.email,
+        "email_verified": user.email_verified_at is not None,
+    }
 
 
 @router.get("/favorites/players")
