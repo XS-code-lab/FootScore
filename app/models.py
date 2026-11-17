@@ -87,6 +87,8 @@ class MatchEvent(Base):
     provider: Mapped[str] = mapped_column(String(40), nullable=False)
     provider_id: Mapped[str] = mapped_column(String(120), nullable=False)
     observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    retracted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     __table_args__ = (UniqueConstraint("provider", "match_id", "provider_id"),)
 
 
@@ -183,6 +185,8 @@ class Notification(Base):
     player_id: Mapped[int] = mapped_column(ForeignKey("players.id"), nullable=False)
     match_id: Mapped[int] = mapped_column(ForeignKey("matches.id"), nullable=False)
     event_key: Mapped[str] = mapped_column(String(200), nullable=False)
+    source_event_id: Mapped[int | None] = mapped_column(ForeignKey("match_events.id"))
+    invalidated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     kind: Mapped[str] = mapped_column(String(30), nullable=False)
     payload: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(
@@ -221,3 +225,16 @@ class PushDelivery(Base):
         UniqueConstraint("notification_id", "device_id"),
         CheckConstraint("attempts >= 0"),
     )
+
+
+class LiveUpdate(Base):
+    __tablename__ = "live_updates"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    match_id: Mapped[int] = mapped_column(ForeignKey("matches.id"), nullable=False)
+    kind: Mapped[str] = mapped_column(String(40), nullable=False)
+    payload: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False,
+    )
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    __table_args__ = (Index("ix_live_updates_match_id_id", "match_id", "id"),)
