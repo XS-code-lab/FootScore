@@ -398,3 +398,59 @@ def test_parallel_postgres_email_workers_send_each_code_once(monkeypatch) -> Non
         assert db.scalar(select(func.count()).select_from(
             AuthOneTimeToken
         ).where(AuthOneTimeToken.consumed_at.is_(None))) == 2
+
+
+def test_real_postgres_recovers_after_partial_redis_publication_failure() -> None:
+    """Outage after first publish never loses persistent replay updates."""
+    from redis.exceptions import ConnectionError as RedisConnectionError
+
+    from app.models import LiveUpdate
+    from app.outbox_cli import publish_once
+    from app.services.live_updates import record_update
+    from app.services.operations import snapshot
+
+    with SessionLocal.begin() as db:
+        match = Match(provider="api-football", provider_id="ci-redis-recovery")
+        db.add(match)
+        db.flush()
+        match_id = match.id
+        record_update(db, match_id, "first", {"order": 1})
+        record_update(db, match_id, "second", {"order": 2})
+
+    class InterruptedRedis:
+        def __init__(self):
+            self.published = 0
+        def publish(self, channel, message):
+            self.published += 1
+            if self.published == 2:
+                raise RedisConnectionError("synthetic interruption")
+            return 1
+
+    broken = InterruptedRedis()
+    with pytest.raises(RedisConnectionError):
+        publish_once(broken)
+    assert broken.published == 2
+    with SessionLocal() as db:
+        pending = db.scalars(select(LiveUpdate).where(
+            LiveUpdate.match_id == match_id,
+            LiveUpdate.published_at.is_(None),
+        )).all()
+        assert len(pending) == 2
+        assert snapshot(db)["match_outbox"]["unpublished"] >= 2
+
+    redis = Redis.from_url(settings.redis_url, decode_responses=True)
+    try:
+        assert publish_once(redis) >= 2
+        with SessionLocal() as db:
+            assert db.scalar(select(func.count()).select_from(
+                LiveUpdate
+            ).where(
+                LiveUpdate.match_id == match_id,
+                LiveUpdate.published_at.is_(None),
+            )) == 0
+            replay = db.scalars(select(LiveUpdate).where(
+                LiveUpdate.match_id == match_id,
+            ).order_by(LiveUpdate.id)).all()
+            assert [row.kind for row in replay] == ["first", "second"]
+    finally:
+        redis.close()
