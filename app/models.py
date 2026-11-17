@@ -4,6 +4,7 @@ from sqlalchemy import (
     CheckConstraint,
     Date,
     DateTime,
+    Boolean,
     Float,
     ForeignKey,
     Integer,
@@ -137,3 +138,86 @@ class TeamMatchStat(Base):
         DateTime(timezone=True), default=utcnow, nullable=False,
     )
     __table_args__ = (UniqueConstraint("match_id", "team_id", "name"),)
+
+
+class User(Base):
+    __tablename__ = "users"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    email: Mapped[str] = mapped_column(String(254), nullable=False, unique=True)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False,
+    )
+
+
+class FavoritePlayer(Base):
+    __tablename__ = "favorite_players"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    player_id: Mapped[int] = mapped_column(ForeignKey("players.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False,
+    )
+    __table_args__ = (UniqueConstraint("user_id", "player_id"),)
+
+
+class NotificationPreference(Base):
+    __tablename__ = "notification_preferences"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), unique=True, nullable=False)
+    goals: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    assists: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    final_rating: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    min_final_rating: Mapped[float | None] = mapped_column(Float)
+    __table_args__ = (
+        CheckConstraint("min_final_rating IS NULL OR "
+                        "(min_final_rating >= 0 AND min_final_rating <= 10)"),
+    )
+
+
+class Notification(Base):
+    __tablename__ = "notifications"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    player_id: Mapped[int] = mapped_column(ForeignKey("players.id"), nullable=False)
+    match_id: Mapped[int] = mapped_column(ForeignKey("matches.id"), nullable=False)
+    event_key: Mapped[str] = mapped_column(String(200), nullable=False)
+    kind: Mapped[str] = mapped_column(String(30), nullable=False)
+    payload: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False,
+    )
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    __table_args__ = (UniqueConstraint("user_id", "event_key"),)
+
+
+class PushDevice(Base):
+    __tablename__ = "push_devices"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    registration_token: Mapped[str] = mapped_column(
+        String(512), nullable=False, unique=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False,
+    )
+
+
+class PushDelivery(Base):
+    __tablename__ = "push_deliveries"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    notification_id: Mapped[int] = mapped_column(
+        ForeignKey("notifications.id"), nullable=False,
+    )
+    device_id: Mapped[int] = mapped_column(
+        ForeignKey("push_devices.id", ondelete="CASCADE"), nullable=False,
+    )
+    status: Mapped[str] = mapped_column(String(20), default="pending", nullable=False)
+    attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    last_error: Mapped[str | None] = mapped_column(String(255))
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    __table_args__ = (
+        UniqueConstraint("notification_id", "device_id"),
+        CheckConstraint("attempts >= 0"),
+    )
