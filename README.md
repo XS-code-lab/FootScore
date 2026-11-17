@@ -14,6 +14,8 @@ Backend-only live football, U22 scouting and AI-analysis platform (work in progr
 - Read endpoints for match event timelines and team match statistics.
 - User registration/login, authenticated favorites, notification preferences and inbox.
 - One-time goal, assist and final rating alerts with optional FCM push outbox.
+- Correction-aware live event reconciliation, retracted notifications, match update outbox.
+- Redis Pub/Sub WebSocket stream plus cursor-based REST replay of match changes.
 
 ## Requirements
 Python 3.11+ or Docker, an API-Football key for real requests. No API key is needed for offline tests.
@@ -81,8 +83,21 @@ Firebase Admin credentials, register a device from an authenticated client
 and run `python -m app.push_cli` in a trusted worker environment.
 See [notifications design](docs/NOTIFICATIONS_DESIGN.md).
 
-The app is not yet production-ready: no live WebSocket, event correction
-reconciliation, Redis, AI scouting, login rate limits or refresh tokens yet.
+For the optional Redis live stream, set `REDIS_URL=redis://redis:6379/0`
+and start the dedicated publisher:
+```bash
+docker compose --profile live up -d redis api live-publisher
+```
+The public stream is `ws://localhost:8000/api/v1/live/matches/{match_id}`.
+To catch up after a disconnect use `GET /api/v1/matches/{match_id}/updates?after_id=0`.
+Live updates are published **only after ingested data is committed**; this
+stream does not poll API-Football for free. See
+[Live stream design](docs/LIVE_STREAM_DESIGN.md).
+
+This remains a development baseline: provider event IDs and VAR corrections
+need more validation, and Redis publisher coordination, backpressure, API
+rate limiting, stronger auth/account lifecycle and AI scouting remain pending.
+Real device push and end-to-end production deployment are unverified.
 
 See [U22 design](docs/U22_SCOUTING_DESIGN.md).
 
