@@ -6,3 +6,9 @@ __pycache__/
 .env
 .env.*
 !.env.example
+
+# Audited research data and experimental models must not be committed.
+data/ml/
+models/
+*.joblib
+*.pkl
