@@ -197,16 +197,28 @@ def run() -> None:
                         # PostgreSQL can emit only a WARNING (no exception)
                         # for GRANT without grant option. Assert the EFFECT,
                         # rather than treating a warning as a security breach.
+                        # PUBLIC is not a role in pg_roles; inspect the
+                        # special ACL grantee oid=0 instead of treating
+                        # PUBLIC as a normal username.
+                        public_insert_sql = (
+                            "SELECT EXISTS ("
+                            " SELECT 1 FROM pg_class AS c,"
+                            " LATERAL aclexplode(COALESCE("
+                            "   c.relacl, acldefault('r', c.relowner)"
+                            " )) AS acl"
+                            " WHERE c.oid = 'public.matches'::regclass"
+                            " AND acl.grantee = 0"
+                            " AND acl.privilege_type = 'INSERT')"
+                        )
+                        app.execute(public_insert_sql)
+                        assert app.fetchone()[0] is False
                         app.execute("SAVEPOINT ci_permission_grant_probe")
                         try:
                             app.execute("GRANT INSERT ON public.matches TO PUBLIC")
                         except psycopg.errors.InsufficientPrivilege:
                             app.execute("ROLLBACK TO SAVEPOINT ci_permission_grant_probe")
                         else:
-                            app.execute(
-                                "SELECT has_table_privilege('PUBLIC', "
-                                "'public.matches', 'INSERT')"
-                            )
+                            app.execute(public_insert_sql)
                             unexpectedly_granted = app.fetchone()[0]
                             app.execute("ROLLBACK TO SAVEPOINT ci_permission_grant_probe")
                             assert not unexpectedly_granted, (
