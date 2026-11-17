@@ -1,8 +1,11 @@
 """Quota-controlled, manual player statistics/profile requests."""
 from dataclasses import dataclass
+from datetime import datetime, timezone
+
+from sqlalchemy import select
 
 from app.db import SessionLocal
-from app.models import Match
+from app.models import HistoricalPlayerFetch, Match
 from app.providers.api_football import ApiFootballClient
 from app.services.player_stats import upsert_fixture_players, upsert_player_profile
 from app.services.quota import reserve_request
@@ -44,6 +47,15 @@ def sync_fixture_players(match_id: int) -> PlayerSyncResult:
     with SessionLocal.begin() as session:
         persisted = session.get(Match, match_id)
         imported = upsert_fixture_players(session, persisted, response)
+        receipt = session.scalar(select(HistoricalPlayerFetch).where(
+            HistoricalPlayerFetch.match_id == match_id,
+        ))
+        if receipt is None:
+            receipt = HistoricalPlayerFetch(match_id=match_id)
+            session.add(receipt)
+        receipt.status = "imported" if imported > 0 else "empty"
+        receipt.players_imported = imported
+        receipt.fetched_at = datetime.now(timezone.utc)
     return PlayerSyncResult(match_id=match_id, imported=imported)
 
 
