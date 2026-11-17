@@ -127,6 +127,8 @@ GitHub Actions now also starts **real test-only PostgreSQL 16 and Redis 7
 containers**, migrates from base to head, checks six concurrent quota clients,
 Redis Pub/Sub delivery of committed match updates, and HTTP replay. It then
 reverses and reapplies the migrations **only on a disposable CI database**.
+A real PostgreSQL concurrency test detected and drove a fix for a request
+budget race: timestamps are now measured after acquiring the provider lock.
 The usual full suite skips these service-specific tests, which run in a
 separate CI job. See
 [PostgreSQL + Redis integration guide](docs/POSTGRES_REDIS_INTEGRATION.md).
