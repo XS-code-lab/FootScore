@@ -57,7 +57,10 @@ async def live_match_socket(websocket: WebSocket, match_id: int) -> None:
             else:
                 outbound.cancel()
                 await asyncio.gather(outbound, return_exceptions=True)
-    except WebSocketDisconnect:
+    except (WebSocketDisconnect, asyncio.CancelledError):
+        # App shutdown can cancel an idle websocket task before its explicit
+        # disconnect frame is delivered. Clean up Redis without treating
+        # orderly cancellation as an application error.
         pass
     except Exception:
         try:
