@@ -1,7 +1,7 @@
 """Authenticated user, player favorites and notification inbox API."""
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -12,6 +12,7 @@ from app.models import (
     FavoritePlayer, Notification, NotificationPreference, Player, PushDevice, User,
 )
 from app.security import current_user, hash_password, issue_token, verify_password
+from app.services.auth_rate import check_auth_limit
 
 router = APIRouter(prefix="/api/v1", tags=["accounts"])
 
@@ -61,7 +62,10 @@ def _pref_json(pref: NotificationPreference) -> dict:
 
 
 @router.post("/auth/register", status_code=201)
-def register(data: Registration, db: Session = Depends(get_db)) -> dict:
+def register(
+    data: Registration, request: Request, db: Session = Depends(get_db),
+) -> dict:
+    check_auth_limit(db, request, "register")
     email = _email(data.email)
     if db.scalar(select(User.id).where(User.email == email)) is not None:
         raise HTTPException(status_code=409, detail="Email already registered")
@@ -78,7 +82,10 @@ def register(data: Registration, db: Session = Depends(get_db)) -> dict:
 
 
 @router.post("/auth/login")
-def login(data: Credentials, db: Session = Depends(get_db)) -> dict:
+def login(
+    data: Credentials, request: Request, db: Session = Depends(get_db),
+) -> dict:
+    check_auth_limit(db, request, "login")
     user = db.scalar(select(User).where(User.email == _email(data.email)))
     if user is None or not user.is_active or not verify_password(
         data.password, user.password_hash
