@@ -134,7 +134,8 @@ jobs:
           # the quiescent synthetic source and untouched restored target.
           # Emit only safe catalog names and aggregate counts on mismatch.
           # Preserve the verifier's nonzero status through tee.
-          python tests/compare_restore_catalog.py --target footscore_restore_ci \
+          FOOTSCORE_DEBUG_CONSTRAINTS=1 \
+            python tests/compare_restore_catalog.py --target footscore_restore_ci \
             | tee "$RUNNER_TEMP/footscore-catalog-compare.json"
           python -c 'import json,os; from pathlib import Path; r=json.loads((Path(os.environ["RUNNER_TEMP"])/"footscore-catalog-compare.json").read_text()); assert r["catalogs_match"] and r["index_count"] >= 10 and r["constraint_count"] >= 10 and r["sequence_count"] >= 5 and all(not v for v in r["mismatched_objects"].values()) and not r["sequence_values_exported"]; print("Restored indexes, constraints and sequence state match source")'
           # FastAPI must point strictly to the disposable restored DB.
