@@ -29,6 +29,7 @@ Backend-only live football, U22 scouting and AI-analysis platform (work in progr
 - HMAC-hashed one-time email confirmation and password reset codes, JWT session invalidation and dry-run cleanup CLI.
 - Authenticated password changes and password-confirmed all-device JWT revocation, plus optional bounded retention worker.
 - Encrypted transactional security-email outbox with bounded SMTP retries and optional background worker.
+- Read-only operator queue-lag/API-budget snapshot and bounded Redis reconnection with replay-safe SQL rollback.
 
 ## Requirements
 Python 3.11+ or Docker, an API-Football key for real requests. No API key is needed for offline tests.
