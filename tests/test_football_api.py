@@ -22,12 +22,6 @@ def test_football_endpoints() -> None:
     app.dependency_overrides[get_db] = override_db
     try:
         with Session(engine) as db:
-            upsert_fixtures(db, [{
-                "fixture": {"id": 5, "status": {"short": "FT"}},
-                "teams": {"home": {"id": 1, "name": "Alpha"}, "away": {"id": 2, "name": "Beta"}},
-                "league": {"id": 10, "name": "Test League"},
-                "goals": {"home": 2, "away": 1},
-            }][0:0])
             fixture = normalize_fixture({
                 "fixture": {"id": 5, "status": {"short": "FT"}},
                 "teams": {"home": {"id": 1, "name": "Alpha"}, "away": {"id": 2, "name": "Beta"}},
