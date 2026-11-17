@@ -3,12 +3,10 @@
 Real PostgreSQL restore is verified in the separate disposable CI job.
 """
 import io
-import os
-from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
-from cryptography.fernet import Fernet
+from cryptography.exceptions import InvalidTag
 
 from app.backup_crypto import encrypt_archive
 from app.restore_audit import (
@@ -87,7 +85,8 @@ def test_isolated_restore_verifies_ciphertext_and_audits_new_target(
     observed = []
 
     def fake_runner(argv, **kwargs):
-        assert argv[:2] == ["sh", str(Path(argv[1]))]
+        assert argv[0] == "sh"
+        assert argv[1].endswith("postgres_restore_drill.sh")
         assert argv[-1] == TARGET
         assert kwargs["check"] is True
         assert kwargs["timeout"] == 900
@@ -125,7 +124,7 @@ def test_tampered_remote_is_never_passed_to_postgres(tmp_path, monkeypatch):
     store = MemoryS3(bytes(altered))
     invoked = []
 
-    with pytest.raises(Exception):
+    with pytest.raises(InvalidTag):
         restore_once(
             bucket=BUCKET, key=KEY, target=TARGET, execute=True,
             s3=store, workspace=tmp_path,
