@@ -239,3 +239,22 @@ class LiveUpdate(Base):
     )
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     __table_args__ = (Index("ix_live_updates_match_id_id", "match_id", "id"),)
+
+
+class HistoricalPlayerFetch(Base):
+    """Receipt for a provider fixture/players response, NOT coverage certification."""
+
+    __tablename__ = "historical_player_fetches"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    match_id: Mapped[int] = mapped_column(
+        ForeignKey("matches.id"), unique=True, nullable=False,
+    )
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    players_imported: Mapped[int] = mapped_column(Integer, nullable=False)
+    fetched_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False,
+    )
+    __table_args__ = (
+        CheckConstraint("status IN ('imported', 'empty')"),
+        CheckConstraint("players_imported >= 0"),
+    )
