@@ -169,3 +169,91 @@ def test_postgres_transaction_rollback_preserves_stream_consistency() -> None:
             LiveUpdate
         ).where(LiveUpdate.match_id == match_id))
     assert after == before
+
+
+def test_multiple_publishers_claim_distinct_postgres_outbox_rows() -> None:
+    """Two workers must not publish the same claimed outbox row."""
+    from app.models import LiveUpdate
+    from app.services.live_updates import record_update
+
+    assert settings.redis_url
+    redis = Redis.from_url(settings.redis_url, decode_responses=True)
+    try:
+        with SessionLocal.begin() as db:
+            # Clear any unrelated pending updates left by other test cases.
+            drain_outbox(db, redis)
+        with SessionLocal.begin() as db:
+            fixture = normalize_fixture({
+                "fixture": {"id": 991007, "date": "2026-11-17T20:00:00Z",
+                            "status": {"short": "1H"}},
+                "league": {"id": 991, "name": "CI Parallel League"},
+                "teams": {"home": {"id": 9911, "name": "Home"},
+                          "away": {"id": 9912, "name": "Away"}},
+                "goals": {"home": 0, "away": 0},
+            })
+            upsert_fixtures(db, [fixture])
+            db.flush()
+            match_id = db.scalar(select(Match.id).where(
+                Match.provider_id == "991007"
+            ))
+            record_update(db, match_id, "parallel_test", {"sequence": 1})
+            # The fixture score update may also be pending. Count all rows.
+        with SessionLocal() as db:
+            expected = db.scalars(select(LiveUpdate.id).where(
+                LiveUpdate.published_at.is_(None),
+            ).order_by(LiveUpdate.id)).all()
+        assert len(expected) == 2
+        gate = Barrier(2)
+
+        def publish_one() -> int:
+            gate.wait(timeout=10)
+            with SessionLocal.begin() as db:
+                return drain_outbox(db, redis, limit=1)
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            counts = list(pool.map(lambda _: publish_one(), range(2)))
+        assert counts == [1, 1]
+        with SessionLocal() as db:
+            assert db.scalar(select(func.count()).select_from(
+                LiveUpdate
+            ).where(LiveUpdate.published_at.is_(None))) == 0
+    finally:
+        redis.close()
+
+
+def test_parallel_auth_attempts_do_not_bypass_login_budget(monkeypatch) -> None:
+    from pydantic import SecretStr
+    from starlette.requests import Request
+
+    from app.models import AuthRateBucket
+    from app.services.auth_rate import check_auth_limit
+
+    monkeypatch.setattr(settings, "jwt_secret", SecretStr("integration-auth-key-" * 3))
+    workers = 16
+    gate = Barrier(workers)
+
+    def attempt() -> int:
+        scope = {
+            "type": "http", "client": ("203.0.113.41", 1234),
+            "headers": [], "method": "POST", "path": "/api/v1/auth/login",
+            "scheme": "http", "server": ("localhost", 80), "query_string": b"",
+        }
+        gate.wait(timeout=10)
+        try:
+            with SessionLocal() as db:
+                return check_auth_limit(db, Request(scope), "login")
+        except Exception as exc:
+            from fastapi import HTTPException
+
+            if isinstance(exc, HTTPException) and exc.status_code == 429:
+                return 0
+            raise
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        values = list(pool.map(lambda _: attempt(), range(workers)))
+    assert sorted(x for x in values if x) == list(range(1, 11))
+    assert values.count(0) == 6
+    with SessionLocal() as db:
+        buckets = db.scalars(select(AuthRateBucket)).all()
+        assert len(buckets) == 1
+        assert buckets[0].used == 10
