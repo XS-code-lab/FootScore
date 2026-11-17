@@ -41,6 +41,11 @@ unique/index access structures that affect constraints and query plans.
 Comparing sequence state detects a restore that might reuse an ID
 or restart a sequence from the wrong position.
 
+Version 0.27 separately checks restored database-local ownership,
+effective object/schema ACL privileges, RLS flags and extension versions,
+and tests a temporary read-only role's inability to write on the
+isolated target (see RESTORED_DATABASE_SECURITY.md).
+
 These checks still do not establish that every index is optimal,
 that production query plans are fast, or that production roles,
 grants, extensions, collation compatibility, physical storage, WAL
