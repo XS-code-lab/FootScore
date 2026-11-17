@@ -8,6 +8,8 @@ Backend-only live football, U22 scouting and AI-analysis platform (work in progr
 - Alembic initial migration, Docker Compose PostgreSQL, manual fixture import.
 - API-Football adapter, idempotent fixture upserts and atomic daily quota reservations.
 - Optional standalone periodic scheduler for a **small pilot league set**.
+- Per-fixture goal/card/substitution/VAR event snapshots and team statistic ingestion.
+- Read endpoints for match event timelines and team match statistics.
 
 ## Requirements
 Python 3.11+ or Docker, an API-Football key for real requests. No API key is needed for offline tests.
@@ -45,7 +47,10 @@ Requests are charged locally **before** calling the provider and are never
 refunded on ambiguous failures. Do not run several schedulers for the same
 league. The pilot interval defaults to six hours; actual quota use depends
 on the number of leagues and additional API clients sharing the key.
-The app is not yet production-ready: no live WebSocket, provider event
-sync, player scouting rankings, Redis cache, notifications or AI yet.
+To fetch events and team statistics for one *existing* FootScore match (costs
+two provider requests), run: `python -m app.live_cli --match-id 1`.
+This is an explicit command rather than automatic polling to conserve quota.
+The app is not yet production-ready: no live WebSocket, player-rating
+sync, event correction reconciliation, scouting, Redis or notifications yet.
 
 See [roadmap](docs/BACKEND_ROADMAP.md) and [provider strategy](docs/FREE_API_STRATEGY.md).
