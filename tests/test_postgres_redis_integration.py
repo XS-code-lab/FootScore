@@ -260,13 +260,15 @@ def test_parallel_auth_attempts_do_not_bypass_login_budget(monkeypatch) -> None:
         assert buckets[0].used == 10
 
 
-def test_two_parallel_password_resets_accept_one_token_only() -> None:
+def test_two_parallel_password_resets_accept_one_token_only(monkeypatch) -> None:
     """PostgreSQL row lock prevents two consumers accepting the same code."""
     from fastapi import HTTPException
+    from pydantic import SecretStr
     from app.models import AuthOneTimeToken, User
     from app.services.account_recovery import issue_code, reset_password
     from app.security import hash_password
 
+    monkeypatch.setattr(settings, "jwt_secret", SecretStr("ci-account-recovery-" * 3))
     with SessionLocal.begin() as db:
         user = User(email="reset-concurrent@example.com",
                     password_hash=hash_password("OriginalPass123!"))
