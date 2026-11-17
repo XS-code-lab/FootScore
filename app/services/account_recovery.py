@@ -1,7 +1,7 @@
-"""One-time token lifecycle and best-effort SMTP SSL delivery.
+"""One-time token lifecycle and encrypted, durable SMTP outbox.
 
-Only token *hashes* are stored in the database, and raw codes are never
-logged, saved in a queue, or returned to anonymous API clients.
+Only HMAC token hashes and encrypted transient SMTP payloads are stored.
+Raw codes are never returned to anonymous API clients or written to logs.
 """
 import hashlib
 import hmac
@@ -15,7 +15,7 @@ from fastapi import HTTPException
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
-from app.models import AuthOneTimeToken, User
+from app.models import AuthOneTimeToken, EmailDelivery, User
 from app.security import _jwt_secret, hash_password
 from app.settings import settings
 
@@ -28,6 +28,7 @@ def email_is_configured() -> bool:
         settings.smtp_sender,
         settings.smtp_username,
         settings.smtp_password,
+        settings.email_queue_key,
     ))
 
 
@@ -149,11 +150,21 @@ def request_code(db: Session, address: str, purpose: str) -> None:
         return
     if purpose == "verify_email" and user.email_verified_at is not None:
         return
-    token = issue_code(db, user, purpose)
+    # Both the one-time token hash and encrypted mail outbox record are
+    # persisted in the SAME transaction, so a process crash cannot leave
+    # a committed code without its delivery job.
+    from app.services.email_outbox import encrypt_code
+
+    code = issue_code(db, user, purpose)
+    db.flush()
+    row = db.scalar(select(AuthOneTimeToken).where(
+        AuthOneTimeToken.token_hash == _token_hash(code),
+    ))
+    db.add(EmailDelivery(
+        token_id=row.id, encrypted_code=encrypt_code(code),
+        status="pending", attempts=0,
+        next_attempt_at=datetime.now(timezone.utc),
+        created_at=datetime.now(timezone.utc),
+    ))
     db.commit()
-    try:
-        send_email_code(user.email, token, purpose)
-    except (OSError, smtplib.SMTPException):
-        # A valid token can be retried only by generating a fresh new request.
-        # Do not expose SMTP errors or raw tokens to public clients.
-        pass
+    # SMTP occurs only in app.email_cli, never during this API request.
