@@ -43,8 +43,7 @@ def sync_match_details(match_id: int, *, events: bool = True,
                 )
         if statistics:
             with SessionLocal.begin() as session:
-                reserve_request(session, limit=settings.provider_daily_limit,
-                                reserve=settings.provider_reserve)
+                reserve_provider_call(session)
             raw = client.fetch_statistics(fixture_id=fixture_id)
             with SessionLocal.begin() as session:
                 stats_count = upsert_match_statistics(
