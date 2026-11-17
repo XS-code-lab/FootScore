@@ -18,8 +18,11 @@ def upgrade() -> None:
                                    nullable=False))
         batch.add_column(sa.Column("retracted_at", sa.DateTime(timezone=True)))
     with op.batch_alter_table("notifications") as batch:
-        batch.add_column(sa.Column("source_event_id", sa.Integer(),
-                                   sa.ForeignKey("match_events.id"), nullable=True))
+        batch.add_column(sa.Column("source_event_id", sa.Integer(), nullable=True))
+        batch.create_foreign_key(
+            "fk_notifications_source_event_id_match_events",
+            "match_events", ["source_event_id"], ["id"],
+        )
         batch.add_column(sa.Column("invalidated_at", sa.DateTime(timezone=True)))
     op.create_table(
         "live_updates",
@@ -38,6 +41,9 @@ def downgrade() -> None:
     op.drop_table("live_updates")
     with op.batch_alter_table("notifications") as batch:
         batch.drop_column("invalidated_at")
+        batch.drop_constraint(
+            "fk_notifications_source_event_id_match_events", type_="foreignkey",
+        )
         batch.drop_column("source_event_id")
     with op.batch_alter_table("match_events") as batch:
         batch.drop_column("retracted_at")
