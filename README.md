@@ -40,6 +40,7 @@ Backend-only live football, U22 scouting and AI-analysis platform (work in progr
 - CI-only complete-row source/restore content comparison across all PostgreSQL application tables using streaming SHA-256 digests.
 - CI-only PostgreSQL index, constraint and sequence-state comparison, followed by FastAPI read/write smoke against an isolated restored database.
 - CI-only restored database security parity (table/schema grants, owners, RLS, installed extension versions) plus actual read-only role negative privilege tests.
+- Read-only PostgreSQL runtime privilege audit and separate password-authenticated runtime/migration role checks against disposable CI recovery.
 
 ## Requirements
 Python 3.11+ or Docker, an API-Football key for real requests. No API key is needed for offline tests.
