@@ -2,7 +2,8 @@
 
 This release adds backend-only account session controls and optional
 bounded cleanup of expired security state. It does **not** add a mobile
-or web frontend and has no real SMTP/Firebase delivery configured.
+or web frontend. v0.16 adds an encrypted SMTP outbox requiring explicit
+configuration; no real SMTP/Firebase delivery was verified.
 
 ## Authenticated session routes
 
@@ -59,7 +60,8 @@ the same new password, and fresh login after password change.
 ## Optional retention worker
 
 `auth_rate_buckets` and `auth_one_time_tokens` already support retention
-cleanup. This release adds a bounded worker that can be used in unattended
+cleanup. Expired tokens and their associated encrypted email outbox rows
+are deleted together before the database foreign-key parent is removed. This release adds a bounded worker that can be used in unattended
 deployments. It is **not started automatically by the API**.
 
 To preview a single cycle without mutating data:
