@@ -106,10 +106,18 @@ def test_isolated_restore_verifies_ciphertext_and_audits_new_target(
     result = restore_once(
         bucket=BUCKET, key=KEY, target=TARGET, execute=True,
         s3=store, workspace=tmp_path, runner=fake_runner, auditor=fake_audit,
+        max_drill_seconds=30,
     )
     assert store.calls == 1
     assert result["cryptographic_integrity_verified"]
     assert result["restored_schema_checked"]
+    assert result["measurements"]["operator_drill_budget_met"] is True
+    assert result["measurements"]["operator_drill_budget_seconds"] == 30
+    assert set(result["measurements"]["phase_seconds"]) == {
+        "download_authenticate", "decrypt", "postgres_restore", "schema_audit",
+    }
+    assert not result["measurements"]["production_rto_verified"]
+    assert not result["measurements"]["complete_source_data_verified"]
     assert not result["rpo_rto_slo_verified"]
     assert result["audit"]["row_counts"] == {"matches": 1, "users": 1}
     assert not observed[0].exists()
@@ -171,3 +179,29 @@ def test_verify_existing_target_rejects_wrong_source_before_network(monkeypatch)
     monkeypatch.setenv("PGDATABASE", TARGET)
     with pytest.raises(ValueError, match="NEW"):
         audit_restored_database(TARGET)
+
+
+def test_failing_independent_auditor_never_reports_recovery_success(
+    tmp_path, monkeypatch,
+):
+    encrypted = sample_encrypted(tmp_path, monkeypatch)
+    with pytest.raises(RuntimeError, match="schema audit"):
+        restore_once(
+            bucket=BUCKET, key=KEY, target=TARGET, execute=True,
+            s3=MemoryS3(encrypted), workspace=tmp_path,
+            runner=lambda argv, **kwargs: None,
+            auditor=lambda target: {"schema_matches_current_head": False},
+        )
+    assert set(item.name for item in tmp_path.iterdir()) == {
+        "source.dump", "encrypted.fsbak",
+    }
+
+
+def test_invalid_restore_budget_is_rejected_before_cloud_or_db(monkeypatch):
+    for name in ("FOOTSCORE_BACKUP_KEY", "PGHOST", "PGUSER", "PGDATABASE"):
+        monkeypatch.delenv(name, raising=False)
+    with pytest.raises(ValueError, match="Duration budget"):
+        restore_once(
+            bucket=BUCKET, key=KEY, target=TARGET,
+            max_drill_seconds=3601,
+        )
