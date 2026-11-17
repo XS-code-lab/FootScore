@@ -6,8 +6,11 @@ entire database into memory. All archive ciphertext is authenticated:
 changing the content, authentication tag, or header causes verification
 and restore to fail.
 
-This release does NOT configure an automatic backup schedule, cloud
-storage, key manager, off-site retention, or production disaster recovery.
+v0.19 introduced local encryption without a cloud scheduler. v0.20 adds an
+optional, explicitly enabled S3-compatible upload command and supervised
+watch loop. It still does NOT create a bucket, cloud account, secret manager,
+remote retention policy or production disaster recovery. See
+[remote backup scheduling](REMOTE_BACKUP_SCHEDULER.md).
 
 ## Independent encryption key
 
