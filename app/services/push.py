@@ -19,7 +19,9 @@ def firebase_sender(token: str, notification: Notification) -> None:
         from firebase_admin import messaging
     except ImportError as exc:
         raise RuntimeError("Install the optional 'push' dependencies") from exc
-    if not firebase_admin._apps:
+    try:
+        firebase_admin.get_app()
+    except ValueError:
         firebase_admin.initialize_app()
     data = {
         "notification_id": str(notification.id),
