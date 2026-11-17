@@ -124,8 +124,15 @@ def main() -> None:
         result = summarize_catalogs(
             catalog_snapshot(source), catalog_snapshot(args.target),
         )
-    except (psycopg.Error, ValueError, RuntimeError):
-        parser.exit(1, "Could not verify PostgreSQL restored catalog\n")
+    except (psycopg.Error, ValueError, RuntimeError) as exc:
+        # Only exception *class* and PostgreSQL SQLSTATE are emitted: no
+        # SQL queries, table contents, connection URLs or private values.
+        state = getattr(exc, "sqlstate", None)
+        kind = type(exc).__name__
+        parser.exit(
+            1, f"Could not verify PostgreSQL restored catalog ({kind}, "
+            f"SQLSTATE={state or 'none'})\\n",
+        )
     print(json.dumps(result, indent=2))
     if not result["catalogs_match"]:
         raise SystemExit(1)
