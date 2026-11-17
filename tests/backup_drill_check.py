@@ -31,7 +31,7 @@ def main() -> None:
         revision = db.execute(
             text("SELECT version_num FROM alembic_version")
         ).scalar_one()
-        if revision != "0011_match_outbox_index":
+        if revision != "0012_backup_alert_state":
             raise RuntimeError("Unexpected migration head")
         if args.action == "seed":
             if db.scalar(select(Match.id).where(
