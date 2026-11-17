@@ -57,9 +57,11 @@ corresponding key. There is no Redis dependency for authentication.
   window when a stricter global guarantee is required.
 - Strong `JWT_SECRET` (32+ chars) must be set for auth. Rotating
   the secret invalidates existing access tokens and changes HMAC buckets.
-- Stale bucket rows currently accumulate; use a scheduled retention
-  policy (delete rows whose `expires_at` is past).
-- No login cooldown, MFA, refresh tokens, reset/recovery flow,
+- Stale bucket rows accumulate until `python -m app.maintenance_cli --execute`
+  is called by a trusted periodic job (dry run by default).
+- Backend v0.14 adds one-time HMAC-hashed email verification/password reset
+  codes and revocable JWT session versions. See ACCOUNT_RECOVERY.md.
+- No login cooldown, MFA, refresh tokens, durable email send queue,
   IP anomaly signals or email verification have been added.
 
 ## CI coverage
