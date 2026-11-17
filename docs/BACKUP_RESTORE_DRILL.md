@@ -33,7 +33,10 @@ An interrupted or failed dump leaves no finished archive.
 It may be truncated, have missing dependencies or reflect an old
 schema. It still must be restored and validated periodically.
 
-**Production security:** The custom-format archive is NOT encrypted.
+**Production security:** The initial custom-format archive is NOT encrypted.
+FootScore v0.19 adds an **optional AES-256-GCM encryption command** and
+CI verification for encrypted restore. See
+[encrypted archives and key management](ENCRYPTED_BACKUPS.md).
 Encrypt it before off-site storage, limit access, define retention,
 rotate backup credentials, test restore keys, and monitor freshness.
 Any encrypted one-time-code payloads within PostgreSQL additionally
@@ -95,8 +98,8 @@ user data.
 
 ## Remaining work
 
-No remote backup schedule, cloud object store, at-rest archive
-encryption, offsite retention, alerting, RPO/RTO target, point-in-time
+No remote backup schedule, cloud object store, automated at-rest encryption,
+offsite retention, alerting, RPO/RTO target, point-in-time
 recovery (PITR) / WAL archiving, realistic large-data restore time
 benchmark, high-availability failover or production-sized backup
 validation is included. The run is a **small synthetic restore drill**
