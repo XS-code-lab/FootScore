@@ -1,6 +1,9 @@
 from fastapi import FastAPI
 
-app = FastAPI(title="FootScore API", version="0.1.0")
+from app.api.football import router as football_router
+
+app = FastAPI(title="FootScore API", version="0.2.0")
+app.include_router(football_router)
 
 
 @app.get("/health", tags=["system"])
