@@ -38,9 +38,12 @@ if [ ! -r "$archive" ] || [ ! -s "$archive" ]; then
 fi
 
 pg_restore --list "$archive" >/dev/null
+started_at=$(date +%s)
 # createdb FAILS if target already exists, so an existing DB is never
 # destroyed, truncated or modified by this helper.
 createdb --maintenance-db=postgres --template=template0 "$target"
 pg_restore --dbname="$target" --single-transaction --exit-on-error \
     --no-owner --no-acl "$archive"
+elapsed_seconds=$(($(date +%s) - started_at))
 echo "Restore completed in a NEW disposable database; verify independently."
+echo "Restore command elapsed (whole seconds): $elapsed_seconds"
