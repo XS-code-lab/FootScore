@@ -124,6 +124,12 @@ jobs:
           python -m app.restore_audit verify --target footscore_restore_ci \
             > "$RUNNER_TEMP/footscore-restore-audit.json"
           python -c 'import json,os; from pathlib import Path; r=json.loads((Path(os.environ["RUNNER_TEMP"])/"footscore-restore-audit.json").read_text()); assert r["schema_matches_current_head"] and r["foreign_key_constraints_validated"] and r["orphan_outbox_rows"] == 0 and r["critical_table_count"] == 6 and r["audit_elapsed_seconds"] >= 0; print("Independent restored schema/foreign-key/time audit passed")'
+          # All user-like records here are deliberately synthetic. Compare
+          # EVERY public table by complete row content, not merely counts.
+          # The fixture database has no writers during this snapshot test.
+          python tests/compare_restore_content.py --target footscore_restore_ci \
+            > "$RUNNER_TEMP/footscore-content-compare.json"
+          python -c 'import json,os; from pathlib import Path; r=json.loads((Path(os.environ["RUNNER_TEMP"])/"footscore-content-compare.json").read_text()); assert r["all_tables_match"] and not r["mismatched_tables"] and r["compared_tables"] >= 15 and r["compared_source_rows"] >= 1500 and r["compared_source_rows"] == r["compared_restored_rows"] and not r["raw_rows_or_hashes_exported"]; print("Independent full-row content comparison passed for all application tables")'
           python tests/backup_drill_check.py verify
           # Guard: the helper must refuse to overwrite an existing restore DB.
           if docker run --rm --network host \
