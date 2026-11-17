@@ -54,7 +54,7 @@ flag only in the isolated integration job.
 
 ## What the integration test establishes
 
-- PostgreSQL migrations 0001–0010 apply and can reverse on an
+- PostgreSQL migrations 0001–0011 apply and can reverse on an
   empty disposable database.
 - Six concurrent clients reserve against a rolling 60-second
   two-request limit: exactly two reservations succeed and four
