@@ -19,6 +19,7 @@ from pathlib import Path
 
 from app.backup_crypto import _key, decrypt_archive
 from app.backup_remote import fetch_and_verify_encrypted_archive, validate_destination
+from app.services.recovery_metrics import recovery_measurements
 
 ROOT = Path(__file__).resolve().parents[1]
 RESTORE_SCRIPT = ROOT / "scripts" / "postgres_restore_drill.sh"
@@ -74,6 +75,7 @@ def audit_restored_database(target: str) -> dict:
 
     validate_drill_target(target, os.environ.get("PGDATABASE"))
     _pg_configuration()
+    started = time.monotonic()
     cfg = Config(str(ROOT / "alembic.ini"))
     expected = ScriptDirectory.from_config(cfg).get_current_head()
     if not expected:
@@ -105,10 +107,21 @@ def audit_restored_database(target: str) -> dict:
             orphan_email = cursor.fetchone()[0]
             if orphan_updates or orphan_email:
                 raise RuntimeError("Restored database contains orphaned outbox rows")
+            cursor.execute(
+                "SELECT COUNT(*) FROM pg_constraint WHERE contype = 'f' "
+                "AND NOT convalidated"
+            )
+            invalid_fk_constraints = cursor.fetchone()[0]
+            if invalid_fk_constraints:
+                raise RuntimeError("Restored database has unvalidated foreign keys")
     return {
         "target": target, "schema_matches_current_head": True,
         "alembic_revision": expected, "row_counts": counts,
-        "orphan_outbox_rows": 0, "encrypted_archive_authenticated": None,
+        "orphan_outbox_rows": 0,
+        "foreign_key_constraints_validated": True,
+        "critical_table_count": len(CRITICAL_TABLES),
+        "audit_elapsed_seconds": round(time.monotonic() - started, 3),
+        "encrypted_archive_authenticated": None,
         "application_functionality_verified": False,
         "source_completeness_verified": False, "rpo_rto_slo_verified": False,
     }
@@ -117,12 +130,14 @@ def audit_restored_database(target: str) -> dict:
 def restore_once(
     *, bucket: str, key: str, target: str, prefix: str = "footscore",
     execute: bool = False, s3=None, workspace: Path | None = None,
-    runner=None, auditor=None,
+    runner=None, auditor=None, max_drill_seconds: int | None = None,
 ) -> dict:
     """Conduct an explicit, non-overwriting encrypted remote restore drill."""
     validate_destination(bucket, prefix)
     validate_archive_key(prefix, key)
     validate_drill_target(target, os.environ.get("PGDATABASE"))
+    if max_drill_seconds is not None and not 1 <= max_drill_seconds <= 3600:
+        raise ValueError("Duration budget must be between 1 and 3600 seconds")
     if not execute:
         return {
             "dry_run": True, "remote_download": False,
@@ -147,14 +162,20 @@ def restore_once(
         auditor = audit_restored_database
 
     started = time.monotonic()
+    phase_seconds = {}
     with tempfile.TemporaryDirectory(prefix="footscore-restore-drill-", dir=workspace) as name:
         directory = Path(name)
         encrypted = directory / "downloaded.fsbak"
         plaintext = directory / "restore-input.dump"
+        phase_started = time.monotonic()
         fetch_and_verify_encrypted_archive(
             s3, bucket=bucket, key=key, destination=encrypted,
         )
+        phase_seconds["download_authenticate"] = time.monotonic() - phase_started
+        phase_started = time.monotonic()
         decrypt_archive(encrypted, plaintext)
+        phase_seconds["decrypt"] = time.monotonic() - phase_started
+        phase_started = time.monotonic()
         try:
             runner(
                 ["sh", str(RESTORE_SCRIPT), str(plaintext), target],
@@ -165,13 +186,23 @@ def restore_once(
             raise RuntimeError(
                 "Isolated restore failed; inspect the disposable target before cleanup"
             ) from exc
+        phase_seconds["postgres_restore"] = time.monotonic() - phase_started
         # A completed pg_restore is not enough: check the target independently.
+        phase_started = time.monotonic()
         report = auditor(target)
+        if report.get("schema_matches_current_head") is not True:
+            raise RuntimeError("Independent restored schema audit did not pass")
+        phase_seconds["schema_audit"] = time.monotonic() - phase_started
+    evidence = recovery_measurements(
+        phase_seconds, elapsed_seconds=time.monotonic() - started,
+        budget_seconds=max_drill_seconds,
+    )
     return {
         "dry_run": False, "remote_download": True,
         "database_created": True, "cryptographic_integrity_verified": True,
         "restored_schema_checked": True, "audit": report,
-        "elapsed_seconds": round(time.monotonic() - started, 3),
+        "elapsed_seconds": evidence["total_elapsed_seconds"],
+        "measurements": evidence,
         "rpo_rto_slo_verified": False,
         "note": "Disposable target is intentionally retained for operator inspection",
     }
@@ -189,6 +220,10 @@ def main() -> None:
     run.add_argument("--target", required=True)
     run.add_argument("--workspace", type=Path)
     run.add_argument("--execute", action="store_true")
+    run.add_argument(
+        "--max-drill-seconds", type=int,
+        help="Optional 1..3600 second local drill duration budget, NOT an RTO",
+    )
     check = sub.add_parser("verify", help="Read-only audit of an existing restore database")
     check.add_argument("--target", required=True)
     args = parser.parse_args()
@@ -197,6 +232,7 @@ def main() -> None:
             report = restore_once(
                 bucket=args.bucket, prefix=args.prefix, key=args.key,
                 target=args.target, execute=args.execute, workspace=args.workspace,
+                max_drill_seconds=args.max_drill_seconds,
             )
         else:
             report = audit_restored_database(args.target)
