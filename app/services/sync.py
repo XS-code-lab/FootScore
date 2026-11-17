@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from app.db import SessionLocal
 from app.providers.api_football import ApiFootballClient
 from app.services.ingestion import upsert_fixtures
-from app.services.quota import reserve_request
+from app.services.provider_guardrails import reserve_provider_call
 from app.settings import settings
 
 
@@ -22,8 +22,7 @@ def sync_league(league: int, season: int) -> SyncResult:
     if not settings.api_football_key:
         raise RuntimeError("API_FOOTBALL_KEY is not configured")
     with SessionLocal.begin() as session:
-        used = reserve_request(session, limit=settings.provider_daily_limit,
-                               reserve=settings.provider_reserve)
+        used = reserve_provider_call(session)
     # Commit reservation before the HTTP call. Retrying requires another reservation.
     client = ApiFootballClient(settings.api_football_key,
                                base_url=settings.api_football_base_url)
