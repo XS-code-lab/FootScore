@@ -119,5 +119,7 @@ still without contacting AWS.
 No real S3 listing, production alert delivery, email notification,
 remote deletion, legal retention policy, off-site immutable storage,
 real restore scheduling, RPO/RTO guarantee or cloud-billing threshold
-is established. Alert delivery can be connected later from a
-trusted external scheduler that checks the CLI exit status.
+is established. Backend v0.22 adds an optional, explicit HTTPS notification worker with
+PostgreSQL deduplication, recovery events and reminders (see
+[backup alerts](BACKUP_ALERTS.md)). CI uses a mocked HTTP transport and
+synthetic S3 metadata; no external webhook has actually been delivered.
