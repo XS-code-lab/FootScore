@@ -36,12 +36,12 @@ def test_migrations_and_concurrent_postgres_quota_reservations() -> None:
         "alembic_version", "matches", "live_updates", "provider_quota",
         "provider_request_log", "provider_rate_locks",
         "historical_player_fetches", "league_coverage_probes", "auth_rate_buckets",
-        "auth_one_time_tokens", "email_deliveries",
+        "auth_one_time_tokens", "email_deliveries", "backup_alert_states",
     } <= tables
     with engine.connect() as connection:
         assert connection.execute(
             text("SELECT version_num FROM alembic_version")
-        ).scalar_one() == "0011_match_outbox_index"
+        ).scalar_one() == "0012_backup_alert_state"
 
     workers = 6
     gate = Barrier(workers)
@@ -454,3 +454,46 @@ def test_real_postgres_recovers_after_partial_redis_publication_failure() -> Non
             assert [row.kind for row in replay] == ["first", "second"]
     finally:
         redis.close()
+
+
+def test_postgres_parallel_backup_webhooks_are_deduplicated() -> None:
+    """Two workers racing on one scope deliver one alert after SQL lock."""
+    from app.models import BackupAlertState
+    from app.services.backup_alerts import deliver_backup_alert, scope_digest
+
+    gate = Barrier(4)
+    sent = []
+
+    def notify() -> bool:
+        gate.wait(timeout=10)
+        with SessionLocal.begin() as db:
+            result = deliver_backup_alert(
+                db, bucket="footscore-ci-alerts", prefix="ci-integration-test",
+                condition="missing",
+                sender=lambda message: sent.append(message),
+            )
+            return result["webhook_sent"]
+
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        results = list(executor.map(lambda _: notify(), range(4)))
+    assert sorted(results) == [False, False, False, True]
+    assert len(sent) == 1
+    assert sent[0]["event"] == "backup_missing"
+    with SessionLocal() as db:
+        assert db.scalar(select(BackupAlertState.condition).where(
+            BackupAlertState.scope_hash == scope_digest(
+                "footscore-ci-alerts", "ci-integration-test",
+            ),
+        )) == "missing"
+
+    # A previously alerted bad state becomes visible again; one recovery
+    # event is delivered and remains clearly marked NOT restore verified.
+    with SessionLocal.begin() as db:
+        result = deliver_backup_alert(
+            db, bucket="footscore-ci-alerts", prefix="ci-integration-test",
+            condition="recent_unverified",
+            sender=lambda message: sent.append(message),
+        )
+    assert result["event"] == "backup_visibility_restored"
+    assert len(sent) == 2
+    assert sent[-1]["restore_verified"] is False
