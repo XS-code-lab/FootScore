@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "footscore-backend"
-version = "0.15.0"
+version = "0.16.0"
 description = "FootScore backend API"
 requires-python = ">=3.11"
 dependencies = [
@@ -20,6 +20,7 @@ dependencies = [
   "PyJWT>=2.9,<3",
   "email-validator>=2,<3",
   "redis>=5.0,<7",
+  "cryptography>=43,<47",
 ]
 
 [project.optional-dependencies]
