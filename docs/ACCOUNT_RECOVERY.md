@@ -111,6 +111,11 @@ one-time consumption, verified-login gate, password reset and old JWT
 revocation, absent SMTP behavior, generic responses and cleanup.
 Disposable PostgreSQL CI also tests concurrent consumption of one code.
 
+Signed-in users may also change their password or revoke all JWTs using
+`/api/v1/auth/password/change` and `/api/v1/auth/sessions/revoke-all`.
+These require the current password and perform a compare-and-swap database
+session version update (v0.15); see [session security](SESSION_SECURITY.md).
+
 This is a solid starting point, **not production identity assurance**:
 registration still reveals duplicate email addresses (409), SMTP is
 synchronous and lacks a durable delivery queue, timing may vary between
