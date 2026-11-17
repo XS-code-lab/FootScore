@@ -44,7 +44,8 @@ only manually ingested test data will appear.
 - Redis Pub/Sub is ephemeral; resume from the persisted REST replay API.
 - No robust replay retention policy, reconnect backpressure or per-client
   quotas; slow clients and many idle connections can consume resources.
-- The publisher is **at least once** and single-worker; crash after publish
+- The publisher is **at least once** and can run multiple workers on
+  PostgreSQL using SKIP LOCKED; crash after publish
   but before commit may deliver duplicates. Clients must deduplicate by id.
 - Some providers correct event time, team or scorer, causing a replacement
   identity. Those changes are recorded as retraction + new event; further
