@@ -18,6 +18,8 @@ services:
     restart: unless-stopped
     environment:
       DATABASE_URL: postgresql+psycopg://footscore:${POSTGRES_PASSWORD}@db:5432/footscore
+      JWT_SECRET: ${JWT_SECRET:-}
+      ACCESS_TOKEN_MINUTES: ${ACCESS_TOKEN_MINUTES:-60}
     ports:
       - "8000:8000"
     depends_on:
