@@ -17,10 +17,13 @@ def test_initial_upgrade_and_downgrade(tmp_path: Path, monkeypatch) -> None:
     assert {"matches", "players", "provider_quota", "team_match_stats", "alembic_version",
             "users", "favorite_players", "notification_preferences", "notifications",
             "push_devices", "push_deliveries", "live_updates",
-            "historical_player_fetches"} <= tables
+            "historical_player_fetches", "provider_rate_locks",
+            "provider_request_log", "league_coverage_probes"} <= tables
     command.downgrade(cfg, "base")
     assert "matches" not in inspect(engine).get_table_names()
     assert "team_match_stats" not in inspect(engine).get_table_names()
     assert "notifications" not in inspect(engine).get_table_names()
     assert "live_updates" not in inspect(engine).get_table_names()
     assert "historical_player_fetches" not in inspect(engine).get_table_names()
+    assert "provider_request_log" not in inspect(engine).get_table_names()
+    assert "league_coverage_probes" not in inspect(engine).get_table_names()
