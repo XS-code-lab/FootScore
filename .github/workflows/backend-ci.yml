@@ -103,9 +103,13 @@ jobs:
             exit 1
           fi
           rm -f "$RUNNER_TEMP/footscore-ci-backup/tampered.fsbak"
+          # The S3 adapter is exercised without external credentials or network.
+          python tests/backup_remote_drill.py \
+            --encrypted "$RUNNER_TEMP/footscore-ci-backup/ci.dump.fsbak" \
+            --downloaded "$RUNNER_TEMP/footscore-ci-backup/remote-download.fsbak"
           rm -f "$RUNNER_TEMP/footscore-ci-backup/ci.dump"
           python -m app.backup_crypto decrypt \
-            --input "$RUNNER_TEMP/footscore-ci-backup/ci.dump.fsbak" \
+            --input "$RUNNER_TEMP/footscore-ci-backup/remote-download.fsbak" \
             --output "$RUNNER_TEMP/footscore-ci-backup/restore-input.dump"
           docker run --rm --network host \
             -e PGHOST -e PGPORT -e PGUSER -e PGDATABASE -e PGPASSWORD \
@@ -131,3 +135,4 @@ jobs:
             postgres:16-alpine dropdb --maintenance-db=postgres footscore_restore_ci
           rm -f "$RUNNER_TEMP/footscore-ci-backup/restore-input.dump"
           rm -f "$RUNNER_TEMP/footscore-ci-backup/ci.dump.fsbak"
+          rm -f "$RUNNER_TEMP/footscore-ci-backup/remote-download.fsbak"
