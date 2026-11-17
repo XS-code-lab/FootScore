@@ -100,8 +100,8 @@ def audit_runtime_connection(conn, migration_role: str) -> dict:
             "has_schema_privilege(current_user, 'public', 'USAGE'), "
             "has_schema_privilege(current_user, 'public', 'CREATE'), "
             "has_database_privilege(current_database(), 'CREATE'), "
-            "current_user <> %s, "
-            "pg_has_role(current_user, %s, 'MEMBER') "
+            "current_user <> CAST(%s AS name), "
+            "pg_has_role(current_user, CAST(%s AS name), 'MEMBER') "
             "FROM pg_roles AS r WHERE r.rolname = current_user",
             (migration_role, migration_role),
         )
