@@ -12,6 +12,7 @@ Backend-only live football, U22 scouting and AI-analysis platform (work in progr
 - Per-fixture player ratings/minutes/goals/assists and targeted player profile enrichment.
 - Read-only U22 established and emerging leaderboards with sample-size shrinkage.
 - New position+competition peer-relative U22 discovery with coverage and uncertainty flags.
+- Offline, audited-label ML experiment with chronological holdout and JSON coefficients.
 - Read endpoints for match event timelines and team match statistics.
 - User registration/login, authenticated favorites, notification preferences and inbox.
 - One-time goal, assist and final rating alerts with optional FCM push outbox.
@@ -107,6 +108,25 @@ See [U22 design](docs/U22_SCOUTING_DESIGN.md) and
 New scouting discovery reads existing match data without consuming new provider
 quota. Scores are **not probabilities or predictions**; only within-competition,
 within-position comparisons are supported when at least five peers are present.
-No league-strength normalization or learned AI model exists yet.
+No league-strength normalization or validated real-data ML model exists yet.
+
+### Offline ML research (v0.8)
+Install the optional research dependencies: `pip install -e '.[dev,ml]'`.
+Export **unverified, unlabeled** feature snapshots using the local database:
+```bash
+mkdir -p data/ml
+python -m app.ml.cli export --cutoff 2024-06-30 --competition-id 1 --position attacker --output data/ml/unverified.jsonl
+```
+A retrospective snapshot is **not** proof that every feature was knowable
+at that cutoff. Labels must be externally audited with complete next-season
+competition tracking and timestamped point-in-time feature evidence.
+Only then train on the curated JSONL file:
+```bash
+python -m app.ml.cli train --input data/ml/verified.jsonl --output data/ml/experiment.json
+```
+The target is next-season **900+ recorded minutes in the same competition**,
+not talent or future career success. No true historical labels or real trained
+model are bundled; experiment artifacts are always non-production and never
+exposed via the public API. See [research protocol](docs/ML_RESEARCH_PROTOCOL.md).
 
 See [roadmap](docs/BACKEND_ROADMAP.md) and [provider strategy](docs/FREE_API_STRATEGY.md).
