@@ -11,6 +11,7 @@ from sqlalchemy import (
     Index,
     JSON,
     String,
+    Text,
     UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column
@@ -326,4 +327,30 @@ class AuthOneTimeToken(Base):
     __table_args__ = (
         CheckConstraint("purpose IN ('verify_email', 'reset_password')"),
         Index("ix_auth_tokens_user_purpose", "user_id", "purpose"),
+    )
+
+
+class EmailDelivery(Base):
+    """Encrypted security-code outbox; only token hashes remain after sending."""
+
+    __tablename__ = "email_deliveries"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    token_id: Mapped[int] = mapped_column(
+        ForeignKey("auth_one_time_tokens.id"), unique=True, nullable=False,
+    )
+    encrypted_code: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    next_attempt_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utcnow,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utcnow,
+    )
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    failure_reason: Mapped[str | None] = mapped_column(String(32))
+    __table_args__ = (
+        CheckConstraint("status IN ('pending', 'sent', 'expired', 'failed')"),
+        CheckConstraint("attempts >= 0"),
+        Index("ix_email_deliveries_status_next_attempt", "status", "next_attempt_at"),
     )
