@@ -24,6 +24,7 @@ Backend-only live football, U22 scouting and AI-analysis platform (work in progr
 - Redis Pub/Sub WebSocket stream plus cursor-based REST replay of match changes.
 - Synthetic end-to-end pilot smoke tests for provider -> ingestion -> scouting/alerts -> outbox.
 - Explicit provider HTTP 429 handling without unlimited retries and database connectivity readiness.
+- Disposable PostgreSQL 16 / Redis 7 integration CI, concurrent quota locking and migration roundtrip.
 
 ## Requirements
 Python 3.11+ or Docker, an API-Football key for real requests. No API key is needed for offline tests.
@@ -120,6 +121,21 @@ Real device push and end-to-end production deployment are unverified.
 Provider 429 responses stop the current request and expose a Retry-After hint
 when numeric; no automatic retry or unreserved repeat requests are made.
 The E2E smoke uses mock provider responses and fake Redis, not real data.
+
+### PostgreSQL and Redis CI checks (v0.12)
+GitHub Actions now also starts **real test-only PostgreSQL 16 and Redis 7
+containers**, migrates from base to head, checks six concurrent quota clients,
+Redis Pub/Sub delivery of committed match updates, and HTTP replay. It then
+reverses and reapplies the migrations **only on a disposable CI database**.
+The usual full suite skips these service-specific tests, which run in a
+separate CI job. See
+[PostgreSQL + Redis integration guide](docs/POSTGRES_REDIS_INTEGRATION.md).
+Do not downgrade a database containing production or valuable data.
+
+The Compose API container now receives provider key and quota settings for
+manual imports. For the optional live profile, set `REDIS_URL` to
+`redis://redis:6379/0` **inside Compose** (not `localhost`).
+These checks do not contact API-Football or prove production readiness.
 
 See [U22 design](docs/U22_SCOUTING_DESIGN.md) and
 [position/league cohort discovery v2](docs/U22_DISCOVERY_V2.md).
