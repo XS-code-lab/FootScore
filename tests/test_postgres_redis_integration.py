@@ -35,12 +35,12 @@ def test_migrations_and_concurrent_postgres_quota_reservations() -> None:
     assert {
         "alembic_version", "matches", "live_updates", "provider_quota",
         "provider_request_log", "provider_rate_locks",
-        "historical_player_fetches", "league_coverage_probes",
+        "historical_player_fetches", "league_coverage_probes", "auth_rate_buckets",
     } <= tables
     with engine.connect() as connection:
         assert connection.execute(
             text("SELECT version_num FROM alembic_version")
-        ).scalar_one() == "0007_provider_guardrails"
+        ).scalar_one() == "0008_auth_rate_bucket"
 
     workers = 6
     gate = Barrier(workers)
