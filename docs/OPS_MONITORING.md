@@ -101,7 +101,11 @@ Configure a trusted metrics exporter, authenticated monitoring and
 on-call alert delivery; verify Redis and SMTP externally; measure
 queue-lag distributions and provider upstream behavior; add load tests
 and service-level objectives; set up encrypted scheduled off-site backups and production-sized restore drills,
-worker health probes and provider-request-log retention. A synthetic PostgreSQL backup/isolated restore drill was added in
+worker health probes and provider-request-log retention. v0.24 adds local recovery phase timing and independent FK validation for
+explicitly selected isolated restore drills. The measured duration is not
+a production RTO/RPO (see RECOVERY_MEASUREMENTS.md).
+
+A synthetic PostgreSQL backup/isolated restore drill was added in
 v0.18, followed by optional authenticated AES-256-GCM archive encryption
 and encrypted-restore CI in v0.19 (see ENCRYPTED_BACKUPS.md). No scheduled
 or offsite backups exist. The new CLI does not send automatic alerts or schedule itself.
