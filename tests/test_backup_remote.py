@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
+from cryptography.exceptions import InvalidTag
 
 from app.backup_crypto import encrypt_archive
 from app.backup_remote import (
@@ -126,7 +127,7 @@ def test_s3_upload_refuses_plaintext_tampering_and_invalid_bucket(tmp_path, cryp
     corrupted = bytearray(encrypted.read_bytes())
     corrupted[-4] ^= 1
     tampered.write_bytes(corrupted)
-    with pytest.raises(Exception):
+    with pytest.raises(InvalidTag):
         store_encrypted_archive(
             s3, path=tampered,
             bucket="footscore-test-bucket", key="footscore/y.fsbak",
