@@ -149,6 +149,8 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(254), nullable=False, unique=True)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    email_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    session_version: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, nullable=False,
     )
@@ -308,3 +310,20 @@ class AuthRateBucket(Base):
     used: Mapped[int] = mapped_column(Integer, nullable=False)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     __table_args__ = (CheckConstraint("used >= 0"),)
+
+
+class AuthOneTimeToken(Base):
+    """Short-lived one-time account recovery or verification code (hash only)."""
+
+    __tablename__ = "auth_one_time_tokens"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    purpose: Mapped[str] = mapped_column(String(24), nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    __table_args__ = (
+        CheckConstraint("purpose IN ('verify_email', 'reset_password')"),
+        Index("ix_auth_tokens_user_purpose", "user_id", "purpose"),
+    )
