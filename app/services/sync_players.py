@@ -8,7 +8,7 @@ from app.db import SessionLocal
 from app.models import HistoricalPlayerFetch, Match
 from app.providers.api_football import ApiFootballClient
 from app.services.player_stats import upsert_fixture_players, upsert_player_profile
-from app.services.quota import reserve_request
+from app.services.provider_guardrails import reserve_provider_call
 from app.settings import settings
 
 
@@ -20,11 +20,7 @@ class PlayerSyncResult:
 
 def _reserve() -> None:
     with SessionLocal.begin() as session:
-        reserve_request(
-            session,
-            limit=settings.provider_daily_limit,
-            reserve=settings.provider_reserve,
-        )
+        reserve_provider_call(session)
 
 
 def sync_fixture_players(match_id: int) -> PlayerSyncResult:
