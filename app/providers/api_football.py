@@ -64,16 +64,31 @@ class ApiFootballClient:
             transport=transport,
         )
 
-    def fetch_fixtures(self, *, league: int, season: int) -> list[Fixture]:
+    def _get(self, path: str, params: dict[str, int]) -> list[dict]:
         try:
-            response = self.client.get("/fixtures", params={"league": league, "season": season})
+            response = self.client.get(path, params=params)
             response.raise_for_status()
             data = response.json()
+            if not isinstance(data, dict) or data.get("errors"):
+                raise ProviderError("API-Football reported an API error")
+            items = data.get("response")
+            if not isinstance(items, list):
+                raise ProviderError("Unexpected API-Football response structure")
+            return items
         except (httpx.HTTPError, ValueError) as exc:
             raise ProviderError("API-Football request failed") from exc
-        if data.get("errors"):
-            raise ProviderError("API-Football reported an API error")
-        return [normalize_fixture(item) for item in data.get("response", [])]
+
+    def fetch_fixtures(self, *, league: int, season: int) -> list[Fixture]:
+        return [
+            normalize_fixture(item)
+            for item in self._get("/fixtures", {"league": league, "season": season})
+        ]
+
+    def fetch_events(self, *, fixture_id: int) -> list[dict]:
+        return self._get("/fixtures/events", {"fixture": fixture_id})
+
+    def fetch_statistics(self, *, fixture_id: int) -> list[dict]:
+        return self._get("/fixtures/statistics", {"fixture": fixture_id})
 
     def close(self) -> None:
         self.client.close()
