@@ -31,10 +31,11 @@ def _jwt_secret() -> str:
     return secret
 
 
-def issue_token(user_id: int) -> str:
+def issue_token(user_id: int, session_version: int = 0) -> str:
     now = datetime.now(timezone.utc)
     claims = {
         "sub": str(user_id),
+        "ver": session_version,
         "iat": now,
         "exp": now + timedelta(minutes=settings.access_token_minutes),
         "iss": "footscore",
@@ -69,4 +70,8 @@ def current_user(
     user = db.get(User, user_id)
     if user is None or not user.is_active:
         raise error
+    if claims.get("ver", 0) != user.session_version:
+        raise error
+    if settings.require_verified_email and user.email_verified_at is None:
+        raise HTTPException(status_code=403, detail="Email confirmation required")
     return user
