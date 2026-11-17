@@ -142,7 +142,7 @@ def test_incorrect_backup_key_rejects_recovery(tmp_path, monkeypatch):
     ciphertext = sample_encrypted(tmp_path, monkeypatch)
     monkeypatch.setenv("FOOTSCORE_BACKUP_KEY", "ab" * 32)
     store = MemoryS3(ciphertext)
-    with pytest.raises(Exception):
+    with pytest.raises(InvalidTag):
         restore_once(
             bucket=BUCKET, key=KEY, target=TARGET, execute=True,
             s3=store, workspace=tmp_path,
