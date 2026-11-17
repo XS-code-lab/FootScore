@@ -35,6 +35,7 @@ Backend-only live football, U22 scouting and AI-analysis platform (work in progr
 - Opt-in encrypted PostgreSQL backup uploads to S3-compatible object storage with conditional create-only writes and bounded scheduling.
 - Read-only remote backup freshness monitoring, bounded S3 inventory and conservative no-delete retention proposals.
 - Optional HTTPS backup visibility alerts with PostgreSQL deduplication and recovery notifications.
+- Explicit independent encrypted S3 archive recovery drill into a NEW disposable PostgreSQL database, with read-only schema and referential checks.
 
 ## Requirements
 Python 3.11+ or Docker, an API-Football key for real requests. No API key is needed for offline tests.
