@@ -3,7 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.models import Competition, Match, Team
+from app.models import Competition, Match
 
 router = APIRouter(prefix="/api/v1", tags=["football"])
 
