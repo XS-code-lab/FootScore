@@ -25,6 +25,7 @@ Backend-only live football, U22 scouting and AI-analysis platform (work in progr
 - Synthetic end-to-end pilot smoke tests for provider -> ingestion -> scouting/alerts -> outbox.
 - Explicit provider HTTP 429 handling without unlimited retries and database connectivity readiness.
 - Disposable PostgreSQL 16 / Redis 7 integration CI, concurrent quota locking and migration roundtrip.
+- PostgreSQL SKIP LOCKED outbox publishing across workers and database-backed auth attempt limits.
 
 ## Requirements
 Python 3.11+ or Docker, an API-Football key for real requests. No API key is needed for offline tests.
@@ -96,7 +97,10 @@ potential prediction**, and is not adjusted for league strength or position.
 Only completed fixtures and players with verified DOB and provider rating count.
 Authentication requires a strong `JWT_SECRET` environment variable (32+ characters).
 Generate it with `python -c "import secrets; print(secrets.token_urlsafe(48))"`.
-Use HTTPS and add a rate limit before exposing account routes publicly.
+Use HTTPS, reverse-proxy trust rules and defense-in-depth before exposing account
+routes publicly. Login now permits 10 attempts per observed peer per 15 minutes;
+registration permits 5. These fixed-window buckets may impact shared NAT
+users and cannot stop distributed attacker IP rotation.
 Set it before using register/login with JWT. Run `alembic upgrade head` again.
 Optional push dispatcher: install `pip install -e '.[push]'`, configure
 Firebase Admin credentials, register a device from an authenticated client
@@ -115,8 +119,8 @@ stream does not poll API-Football for free. See
 [Live stream design](docs/LIVE_STREAM_DESIGN.md).
 
 This remains a development baseline: provider event IDs and VAR corrections
-need more validation, and Redis publisher coordination, backpressure, API
-rate limiting, stronger auth/account lifecycle and trained AI scouting remain pending.
+need more validation, and Redis publisher backpressure, account abuse hardening, stronger
+account lifecycle and trained real-data AI scouting remain pending.
 Real device push and end-to-end production deployment are unverified.
 Provider 429 responses stop the current request and expose a Retry-After hint
 when numeric; no automatic retry or unreserved repeat requests are made.
@@ -138,6 +142,17 @@ The Compose API container now receives provider key and quota settings for
 manual imports. For the optional live profile, set `REDIS_URL` to
 `redis://redis:6379/0` **inside Compose** (not `localhost`).
 These checks do not contact API-Football or prove production readiness.
+
+### Reliability hardening (v0.13)
+PostgreSQL outbox publishing uses row locks with `SKIP LOCKED`, allowing
+multiple publishers to claim distinct rows. Pub/Sub still offers **at-least-once
+publication**, not guaranteed order or exactly-once client delivery. Use the
+REST cursor replay to fill gaps and deduplicate by update ID.
+
+Login and registration now use database-backed, 15-minute, per-peer abuse
+limits with no raw IP storage. Ensure `JWT_SECRET` is configured and apply
+Alembic revision 0008. Old rate bucket rows need periodic cleanup.
+See [production reliability design](docs/PRODUCTION_RELIABILITY.md).
 
 See [U22 design](docs/U22_SCOUTING_DESIGN.md) and
 [position/league cohort discovery v2](docs/U22_DISCOVERY_V2.md).
