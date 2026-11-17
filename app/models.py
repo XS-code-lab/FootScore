@@ -298,3 +298,13 @@ class LeagueCoverageProbe(Base):
     __table_args__ = (
         UniqueConstraint("provider", "provider_league_id", "season"),
     )
+
+
+class AuthRateBucket(Base):
+    """Hashed peer/action window; never stores raw IP or passwords."""
+
+    __tablename__ = "auth_rate_buckets"
+    key: Mapped[str] = mapped_column(String(120), primary_key=True)
+    used: Mapped[int] = mapped_column(Integer, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    __table_args__ = (CheckConstraint("used >= 0"),)
