@@ -1,0 +1,42 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: footscore
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: footscore
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U footscore -d footscore"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+  api:
+    build: .
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+psycopg://footscore:${POSTGRES_PASSWORD}@db:5432/footscore
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+  scheduler:
+    build: .
+    profiles: ["sync"]
+    restart: unless-stopped
+    command: ["python", "-m", "app.scheduler"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://footscore:${POSTGRES_PASSWORD}@db:5432/footscore
+      API_FOOTBALL_KEY: ${API_FOOTBALL_KEY:-}
+      SYNC_LEAGUES: ${SYNC_LEAGUES:-}
+      SYNC_INTERVAL_MINUTES: ${SYNC_INTERVAL_MINUTES:-360}
+      PROVIDER_DAILY_LIMIT: ${PROVIDER_DAILY_LIMIT:-100}
+      PROVIDER_RESERVE: ${PROVIDER_RESERVE:-10}
+    depends_on:
+      db:
+        condition: service_healthy
+volumes:
+  pgdata:
