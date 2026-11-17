@@ -242,3 +242,30 @@ def test_outcome_proposals_preserve_unknown_negative_labels() -> None:
                 "target_window_start": "2026-07-01",
                 "target_window_end": "2027-06-30",
             }])
+
+
+def test_plan_never_exceeds_local_daily_reserve(monkeypatch) -> None:
+    engine = _database()
+    monkeypatch.setattr(settings, "provider_daily_limit", 2)
+    monkeypatch.setattr(settings, "provider_reserve", 1)
+    with Session(engine) as db:
+        _seed_fixtures(db)
+        db.add(ProviderQuota(
+            provider="api-football",
+            day=datetime.now(timezone.utc).date(),
+            used=1,
+        ))
+        db.commit()
+        from app.models import Competition
+
+        competition = db.scalar(select(Competition))
+        plan = plan_historical_backfill(
+            db, competition_id=competition.id,
+            start=date(2024, 7, 1), end=date(2025, 6, 30),
+            max_requests=10,
+        )
+        assert plan["pending_count"] == 3
+        assert plan["local_remaining_budget"] == 0
+        assert plan["selected"] == []
+        assert plan["estimated_api_calls"] == 0
+        assert plan["provider_remaining_budget_confirmed"] is False
