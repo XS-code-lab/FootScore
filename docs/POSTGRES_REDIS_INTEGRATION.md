@@ -67,6 +67,8 @@ flag only in the isolated integration job.
 - Two concurrent PostgreSQL outbox publishers skip each other's claimed
   rows, 16 authentication attempts enforce the 10-attempt per-peer limit,
   and two concurrent password reset consumers cannot use one code twice.
+- Two concurrent all-session revoke requests with the same JWT version
+  yield exactly one successful revocation (compare-and-swap).
 - Real Redis receives an update published from a committed
   PostgreSQL outbox row, and the HTTP replay endpoint returns it.
 - A deliberately failed ingestion transaction does not persist
