@@ -14,6 +14,7 @@ from app.models import (
 from app.security import current_user, hash_password, issue_token, verify_password
 from app.services import account_recovery
 from app.services.auth_rate import check_auth_limit
+from app.services.session_security import change_password, revoke_all_sessions
 from app.settings import settings
 
 router = APIRouter(prefix="/api/v1", tags=["accounts"])
@@ -33,6 +34,15 @@ class PreferencesUpdate(BaseModel):
     assists: bool | None = None
     final_rating: bool | None = None
     min_final_rating: float | None = Field(default=None, ge=0, le=10)
+
+
+class PasswordChange(BaseModel):
+    current_password: str = Field(min_length=1, max_length=128)
+    new_password: str = Field(min_length=12, max_length=128)
+
+
+class AllSessionsRevoke(BaseModel):
+    current_password: str = Field(min_length=1, max_length=128)
 
 
 class EmailRequest(BaseModel):
@@ -157,6 +167,37 @@ def me(user: User = Depends(current_user)) -> dict:
         "id": user.id, "email": user.email,
         "email_verified": user.email_verified_at is not None,
     }
+
+
+@router.post("/auth/password/change")
+def change_authenticated_password(
+    data: PasswordChange, request: Request,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    # Capture the version authenticated by the JWT BEFORE the limit
+    # transaction commits and expires the ORM user object.
+    expected_version = user.session_version
+    check_auth_limit(db, request, "password_change")
+    change_password(
+        db, user, data.current_password, data.new_password,
+        expected_version=expected_version,
+    )
+    return {"password_changed": True, "sessions_revoked": True}
+
+
+@router.post("/auth/sessions/revoke-all")
+def revoke_all_authenticated_sessions(
+    data: AllSessionsRevoke, request: Request,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    expected_version = user.session_version
+    check_auth_limit(db, request, "revoke_all")
+    revoke_all_sessions(
+        db, user, data.current_password, expected_version=expected_version,
+    )
+    return {"sessions_revoked": True}
 
 
 @router.get("/favorites/players")
