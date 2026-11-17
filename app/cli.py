@@ -1,6 +1,6 @@
 """Development ingestion command: python -m app.cli --league 39 --season 2026."""
 import argparse
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 
 from sqlalchemy import select
 
