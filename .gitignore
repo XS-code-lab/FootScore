@@ -18,3 +18,6 @@ models/
 *.backup
 *.pgdump
 backups/
+
+# Authenticated encrypted archives are still sensitive; never commit them.
+*.fsbak
